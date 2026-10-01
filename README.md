@@ -17,13 +17,30 @@ Déployer `supabase/functions/staff-admin/index.ts` avec `verify_jwt=true`. La f
 
 Dans Admin, la direction choisit un mot de passe lors de la création ou de la réinitialisation d’un compte. Après une réinitialisation, son titulaire doit le changer. Pour modifier son propre mot de passe, le mot de passe actuel est demandé. Les sessions de l’interface sont en mémoire et nécessitent une reconnexion après rechargement ou expiration.
 
-## Limites et mise en production
+## Modules partagés
 
-Le premier compte est actif. Les tests automatisés Auth sont simulés ; le point d’entrée réel refuse les requêtes non authentifiées et accepte le précontrôle CORS du domaine de production. Un essai utilisateur de connexion/création/réinitialisation avec le mot de passe choisi reste à réaliser.
+Appliquer une fois `database/modules.sql`, puis déployer `supabase/functions/staff-data/index.ts` avec `verify_jwt=true`. Les migrations sont déjà appliquées au projet de production et les deux fonctions sont déployées.
 
-Les plannings, tâches, débriefs et pointages restent une démonstration locale. Ils ne sont pas synchronisés entre appareils par cette évolution. Les tables équipes et administrateurs ont été créées séparément dans Supabase.
+- Planning : brouillon et publication distincts, révision contrôlée pour détecter les modifications concurrentes. Les salariés ne reçoivent que leur planning publié.
+- Disponibilités : saisie par le titulaire, visible par la direction ; écritures successives mises en file pour conserver les sélections rapides.
+- Tâches : checklist partagée par journée (Europe/Paris), auteur visible uniquement par la direction.
+- Débriefs : service publié du salarié et retour collectif de la direction.
+- Pointages : début/fin enregistrés à l’heure du serveur, démarrage et arrêt idempotents ; correction par la direction avec motif.
+- Signalements : enregistrement personnel et consultation par la direction.
 
-Les accès rapides de démonstration ne fonctionnent qu’en ouvrant le fichier local ; ils sont retirés et ignorés sur le site hébergé. Aucun mot de passe utilisateur réel n’est présent dans ce dépôt public.
+Les tables métier des modules sont fermées aux rôles navigateur `anon` et `authenticated`. Seule la fonction serveur accède à ces tables après validation de l’utilisateur auprès d’Auth, du rôle actif et de la version du mot de passe. RLS reste activé sans politique publique : l’avis informatif « RLS Enabled No Policy » correspond ici au refus volontaire de l’accès direct. Voir [le contrôle Supabase](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+Les données de démonstration et l’authentification locale sont supprimées. Le navigateur ne conserve que les préférences d’affichage du calendrier. Les jeux d’exemple de planning sont isolés dans `tests/initial-fixture.js` et ne sont pas chargés par l’application.
+
+`vercel.json` relaie Auth et les fonctions depuis `/api/` sur le même domaine que l’application, sans cache. Le numéro reste un identifiant : aucun prestataire SMS n’est nécessaire. Une fusion sur la branche de production déclenche le déploiement GitHub/Vercel existant.
+
+## Limites explicites
+
+Les rappels automatiques ne sont pas configurés. L’activité de session est temporaire ; les validations et corrections sont conservées dans leurs modules. Les actualisations se font après chaque écriture et toutes les 20 secondes hors saisie, ou avec le bouton Actualiser. Une reconnexion est nécessaire après rechargement ou expiration de session.
+
+La protection Supabase contre les mots de passe compromis est désactivée dans les réglages actuels du projet ; voir [le réglage Supabase](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection). L’application impose déjà longueur et complexité aux créations et changements.
+
+Le mot de passe du premier administrateur est celui choisi dans Supabase ; aucun mot de passe réel n’est présent dans ce dépôt public. Le test de connexion utilisateur avec ce mot de passe reste à confirmer.
 
 ## Vérification
 
@@ -32,6 +49,7 @@ Avec Node.js 24 :
 ```sh
 node tests/test-planning.cjs
 node tests/test-auth.cjs
+node tests/test-data.cjs
 ```
 
-24 scénarios de planning ; tests d’authentification simulant les accès refusés, les rôles, la création, le mot de passe choisi, la réinitialisation, le remplacement des sessions locales et la déconnexion. Ces tests ne remplacent pas une vérification visuelle ni un test réel Supabase.
+24 scénarios de planning ; tests Auth et API métier simulés : rôles, filtres personnels, réinitialisation, identité et date serveur, disponibilités, validation de publication, conflit de révision et écritures rapides. Dans la base réelle, le démarrage/arrêt idempotent du pointage et les contraintes ont été vérifiés dans une transaction annulée. Aucun pointage de test n’est conservé.
