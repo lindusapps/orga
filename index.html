@@ -452,7 +452,11 @@ body.keyboard-open .top{position:relative}
 .security-agent h3{margin:0 0 10px;font-size:22px}
 .security-agent form{display:flex;align-items:end;gap:16px;flex-wrap:wrap}
 .security-agent .field{flex:1;min-width:170px}
-.security-team-choice{display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer}
+.security-team-choice{display:flex;align-items:center;justify-content:flex-start;gap:12px;margin-top:8px;padding:10px 12px;min-height:44px;cursor:pointer;border:1px solid var(--line);border-radius:11px;overflow-wrap:anywhere}
+.security-team-choice input[type="checkbox"]{flex:0 0 20px;width:20px!important;height:20px!important;min-height:20px!important;max-width:20px;padding:0;margin:0}
+#newUserTeams,#editAccountTeams{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px}
+.field .security-team-choice{font-size:14px;color:var(--text)}
+.field select{min-height:46px}
 </style>
 </head>
 <body class="splash-lock auth-locked">
@@ -663,10 +667,55 @@ body.keyboard-open .top{position:relative}
   const authBase='';
   const publicKey='sb_publishable_eGE6YWmj8Ysn4cuAN46G3Q_90unePnZ';
   let accessToken=null,remoteBusy=false,accountTeams=[],accountRoles=[];
+  const sessionKey='lindus_staff_session_v1',sessionLifetime=2*60*60*1000;
+  let authSession=null,sessionTimer=null,refreshPending=null,sessionGeneration=0;
+  function clearSession(){
+    sessionGeneration++;accessToken=null;authSession=null;refreshPending=null;clearTimeout(sessionTimer);sessionTimer=null;
+    try{sessionStorage.removeItem(sessionKey);}catch{}
+  }
+  function expireSession(message='Les deux heures de connexion sont écoulées. Reconnecte-toi.'){
+    const token=accessToken;clearSession();showLogin(message);
+    if(token)fetch(authBase+'/api/auth/logout?scope=local',{method:'POST',headers:{apikey:publicKey,Authorization:'Bearer '+token}}).catch(()=>{});
+  }
+  function checkSessionDeadline(){
+    if(authSession&&Date.now()>=authSession.deadline){expireSession();return false;}return !!authSession;
+  }
+  function persistSession(){
+    try{sessionStorage.setItem(sessionKey,JSON.stringify(authSession));}catch{}
+    clearTimeout(sessionTimer);sessionTimer=setTimeout(()=>{if(!checkSessionDeadline())return;persistSession();},Math.max(0,authSession.deadline-Date.now()));
+  }
+  function acceptTokens(data,deadline){
+    if(typeof data.access_token!=='string'||!data.access_token)throw new Error('Session de connexion invalide.');
+    authSession={accessToken:data.access_token,refreshToken:data.refresh_token||null,accessExpiresAt:Date.now()+(Number(data.expires_in)||3600)*1000,deadline};
+    accessToken=authSession.accessToken;persistSession();
+  }
+  async function ensureSession(){
+    if(!checkSessionDeadline())throw new Error('Session expirée. Reconnecte-toi.');
+    if(Date.now()<authSession.accessExpiresAt-60000)return;
+    if(refreshPending)return refreshPending;
+    if(!authSession.refreshToken){expireSession('Session expirée. Reconnecte-toi.');throw new Error('Session expirée.');}
+    const generation=sessionGeneration,deadline=authSession.deadline,refreshToken=authSession.refreshToken;
+    const operation=(async()=>{
+      const r=await fetch(authBase+'/api/auth/token?grant_type=refresh_token',{method:'POST',headers:{apikey:publicKey,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:refreshToken})});
+      const data=await r.json();
+      if(generation!==sessionGeneration)throw new Error('Session fermée.');
+      if(!r.ok){if(r.status===400||r.status===401)expireSession('Session expirée. Reconnecte-toi.');throw new Error('Impossible de renouveler la connexion. Réessaie.');}
+      if(!checkSessionDeadline())throw new Error('Session expirée.');
+      acceptTokens(data,deadline);
+    })();
+    refreshPending=operation;
+    try{await operation;}finally{if(refreshPending===operation)refreshPending=null;}
+  }
+  async function sessionFetch(path,options){
+    await ensureSession();const generation=sessionGeneration;
+    const response=await fetch(authBase+path,{...options,headers:{...options.headers,Authorization:'Bearer '+accessToken}});
+    if(generation!==sessionGeneration||!checkSessionDeadline())throw new Error('Session expirée. Reconnecte-toi.');
+    return response;
+  }
   async function accountRequest(action,params={}) {
-    const r=await fetch(authBase+'/api/functions/staff-admin',{method:'POST',headers:{apikey:publicKey,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({action,...params})});
+    const r=await sessionFetch('/api/functions/staff-admin',{method:'POST',headers:{apikey:publicKey,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({action,...params})});
     const data=await r.json();
-    if(!r.ok){if(r.status===401){accessToken=null;showLogin('Session expirée. Reconnecte-toi.');}throw new Error(data.error||'Opération impossible.');}
+    if(!r.ok){if(r.status===401||(r.status===403&&action==='me')){clearSession();showLogin('Session expirée ou compte désactivé. Reconnecte-toi.');}throw new Error(data.error||'Opération impossible.');}
     return data;
   }
   async function remoteLogin(login,password) {
@@ -675,7 +724,10 @@ body.keyboard-open .top{position:relative}
     const email='u'+phone.slice(1)+'@login.indussapp.invalid';
     const r=await fetch(authBase+'/api/auth/token?grant_type=password',{method:'POST',headers:{apikey:publicKey,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
     const data=await r.json();if(!r.ok)throw new Error(r.status===429?'Trop de tentatives. Attends un moment avant de réessayer.':r.status>=500?'Le service de connexion est temporairement indisponible.':'Identifiant ou mot de passe incorrect.');
-    accessToken=data.access_token;
+    clearSession();acceptTokens(data,Date.now()+sessionLifetime);
+    await resumeAuthenticatedSession();
+  }
+  async function resumeAuthenticatedSession(){
     const result=await accountRequest('me');state.users={[result.user.id]:result.user};
     if(result.user.role==='direction'&&!result.user.mustChange)await refreshRemoteAccounts();
     document.getElementById('loginPassword').value='';if(!result.user.mustChange){state.currentUser=result.user.id;try{await loadCloud(true);}catch(e){state.currentUser=null;throw e;}}startAuthenticatedSession(result.user.id);
@@ -744,8 +796,8 @@ body.keyboard-open .top{position:relative}
   function syncMessage(text,error=false){const e=document.getElementById('cloudStatus');if(e){e.textContent=text;e.style.color=error?'#ffaaaa':'';}}
   function planPayload(){return Object.fromEntries(planFields.map(f=>[f,state[f]??(f==='customSlots'?[]:{})]));}
   async function dataRequest(action,params={}){
-    const r=await fetch(authBase+'/api/functions/staff-data',{method:'POST',headers:{apikey:publicKey,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({action,...params})});const d=await r.json();
-    if(!r.ok){if(r.status===401||(r.status===403&&action==='load')){cloudReady=false;accessToken=null;showLogin(r.status===403?'Ce compte ne dispose plus d’un accès actif.':'Session expirée. Reconnecte-toi.');}throw new Error(d.error||'Service indisponible.');}return d;
+    const r=await sessionFetch('/api/functions/staff-data',{method:'POST',headers:{apikey:publicKey,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({action,...params})});const d=await r.json();
+    if(!r.ok){if(r.status===401||(r.status===403&&action==='load')){cloudReady=false;clearSession();showLogin(r.status===403?'Ce compte ne dispose plus d’un accès actif.':'Session expirée. Reconnecte-toi.');}throw new Error(d.error||'Service indisponible.');}return d;
   }
   async function loadCloud(force=false){
     if(!accessToken||cloudLoading||(!force&&(cloudSaving||cloudTimer)))return;
@@ -854,10 +906,24 @@ body.keyboard-open .top{position:relative}
     completeLogin(k);
   }
   function logout(){
-    if(hostedAuth){const token=accessToken;accessToken=null;if(token)fetch(authBase+'/api/auth/logout',{method:'POST',headers:{apikey:publicKey,Authorization:'Bearer '+token}}).catch(()=>{});document.getElementById('userAdminConfirm').textContent='';}
+    if(hostedAuth){const token=accessToken;clearSession();if(token)fetch(authBase+'/api/auth/logout?scope=local',{method:'POST',headers:{apikey:publicKey,Authorization:'Bearer '+token}}).catch(()=>{});document.getElementById('userAdminConfirm').textContent='';}
     if(state.currentUser)logAction('Déconnexion de l’application');const p=document.getElementById('profile-open');if(p)p.checked=false;showLogin();
   }
-  function initAuth(){document.getElementById('loginIdentifier').placeholder='Votre numéro de téléphone';showLogin();}
+  async function initAuth(){
+    document.getElementById('loginIdentifier').placeholder='Votre numéro de téléphone';showLogin();
+    if(!hostedAuth)return;
+    let saved;try{saved=JSON.parse(sessionStorage.getItem(sessionKey)||'null');}catch{clearSession();return;}
+    if(!saved)return;
+    if(typeof saved.accessToken!=='string'||!Number.isFinite(saved.deadline)||!Number.isFinite(saved.accessExpiresAt)||saved.deadline>Date.now()+sessionLifetime){clearSession();return;}
+    authSession=saved;accessToken=saved.accessToken;if(!checkSessionDeadline())return;
+    persistSession();remoteBusy=true;const button=document.querySelector('#loginForm button[type="submit"]');if(button)button.disabled=true;
+    try{await resumeAuthenticatedSession();}
+    catch(e){showLogin(e instanceof TypeError?'Connexion au serveur impossible. Recharge la page pour réessayer.':e.message);}
+    finally{remoteBusy=false;if(button)button.disabled=false;}
+  }
+  window.addEventListener('focus',checkSessionDeadline);
+  window.addEventListener('pageshow',checkSessionDeadline);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkSessionDeadline();});
   function applyAccess(){
     app.classList.toggle('security-access',isSecurityManager());app.classList.toggle('force-direction',isDirection());app.classList.toggle('force-employee',!isDirection());
     const proxy=document.getElementById(isDirection()?'acct-ludovic':'acct-a');if(proxy)proxy.checked=true;
@@ -1103,13 +1169,13 @@ body.keyboard-open .top{position:relative}
   document.getElementById('loginForm')?.addEventListener('submit',async e=>{
     e.preventDefault();if(remoteBusy)return;remoteBusy=true;const button=e.target.querySelector('button[type="submit"]');if(button)button.disabled=true;
     try{await remoteLogin(document.getElementById('loginIdentifier').value,document.getElementById('loginPassword').value);}
-    catch(e){accessToken=null;state.currentUser=null;cloudReady=false;setAuthError(document.getElementById('loginError'),e instanceof TypeError?'Connexion au serveur impossible. Recharge la page et réessaie.':e.message);}
+    catch(e){clearSession();state.currentUser=null;cloudReady=false;setAuthError(document.getElementById('loginError'),e instanceof TypeError?'Connexion au serveur impossible. Recharge la page et réessaie.':e.message);}
     finally{remoteBusy=false;if(button)button.disabled=false;}
   });
   document.getElementById('passwordChangeForm')?.addEventListener('submit',async e=>{
     e.preventDefault();const err=document.getElementById('passwordChangeError'),p1=document.getElementById('newPassword1').value,p2=document.getElementById('newPassword2').value;
     if(p1.length<10){setAuthError(err,'Choisis au moins 10 caractères.');return}if(p1!==p2){setAuthError(err,'Les deux mots de passe ne correspondent pas.');return}if(!/[A-Z]/.test(p1)||!/[a-z]/.test(p1)||!/[0-9]/.test(p1)){setAuthError(err,'Ajoute au moins une majuscule, une minuscule et un chiffre.');return}
-    if(hostedAuth){if(remoteBusy)return;remoteBusy=true;try{await accountRequest('change-password',{password:p1,currentPassword:document.getElementById('currentPassword').value});accessToken=null;pendingPasswordUser=null;['currentPassword','newPassword1','newPassword2'].forEach(id=>document.getElementById(id).value='');showLogin('Mot de passe changé. Reconnecte-toi.');}catch(e){setAuthError(err,e.message);}finally{remoteBusy=false;}return;}
+    if(hostedAuth){if(remoteBusy)return;remoteBusy=true;try{await accountRequest('change-password',{password:p1,currentPassword:document.getElementById('currentPassword').value});clearSession();pendingPasswordUser=null;['currentPassword','newPassword1','newPassword2'].forEach(id=>document.getElementById(id).value='');showLogin('Mot de passe changé. Reconnecte-toi.');}catch(e){setAuthError(err,e.message);}finally{remoteBusy=false;}return;}
 
   });
   document.getElementById('logoutBtn')?.addEventListener('click',logout);
