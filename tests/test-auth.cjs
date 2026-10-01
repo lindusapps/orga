@@ -1,0 +1,46 @@
+const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),path=require('path');
+const {stripTypeScriptTypes}=require('node:module');
+const crypto=require('node:crypto').webcrypto;
+const source=fs.readFileSync(path.join(__dirname,'../supabase/functions/staff-admin/index.ts'),'utf8');
+const uid='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222';
+let handler,actor,calls=[],failAuth=false;
+const token=(version=0)=>'header.'+Buffer.from(JSON.stringify({app_metadata:{password_version:version}})).toString('base64url')+'.signature';
+const context={Deno:{env:{get:n=>n==='SUPABASE_URL'?'https://project.example':'server-secret'},serve:fn=>handler=fn},Request,Response,crypto,atob,fetch:async(url,opts)=>{
+ calls.push({url,opts,body:opts.body?JSON.parse(opts.body):undefined});
+ if(url.endsWith('/auth/v1/user')&&opts.method==='GET')return Response.json(actor||{},{status:failAuth?401:200});
+ if(url.includes('/admin/users?page='))return Response.json({users:[actor]});
+ if(url.endsWith('/admin/users/'+other)&&opts.method==='GET')return Response.json({id:other,app_metadata:{staff_role:'employee'}});
+ if(url.endsWith('/admin/users')&&opts.method==='POST')return Response.json({id:other,...JSON.parse(opts.body)});
+ return Response.json({});
+}};
+vm.runInNewContext(stripTypeScriptTypes(source),context);
+const req=async(body,version=0)=>{const r=await handler(new Request('https://project.example/functions/v1/staff-admin',{method:'POST',headers:{Authorization:'Bearer '+token(version),Origin:'https://indussapp.vercel.app','Content-Type':'application/json'},body:JSON.stringify(body)}));return {status:r.status,data:await r.json()};};
+function setup(role='direction',extra={}){actor={id:uid,email:'u33600000000@login.indussapp.invalid',app_metadata:{staff_role:role,staff_login:'0600000000',staff_name:'Test',...extra}};calls=[];failAuth=false;}
+(async()=>{
+setup();failAuth=true;assert.equal((await req({action:'list'})).status,401);
+setup('employee');assert.equal((await req({action:'reset-password',userId:other,password:'Example1234'})).status,403);assert.equal(calls.length,1);
+setup('employee');actor.user_metadata={staff_role:'direction'};assert.equal((await req({action:'create'})).status,403);
+setup('direction',{staff_active:false});assert.equal((await req({action:'list'})).status,403);
+setup('direction',{must_change_password:true});assert.equal((await req({action:'list'})).status,403);
+setup('direction',{password_version:2});assert.equal((await req({action:'list'},1)).status,401);
+setup();assert.equal((await req({action:'list'})).data.users[0].login,'0600000000');
+setup();assert.equal((await req({action:'reset-password',userId:uid,password:'Example1234'})).status,400);
+setup();assert.equal((await req({action:'reset-password',userId:other,password:'weak'})).status,400);assert.ok(!calls.some(x=>x.opts.method==='PUT'));
+setup();assert.equal((await req({action:'reset-password',userId:other,password:'Example1234'})).status,200);const reset=calls.find(x=>x.opts.method==='PUT');assert.equal(reset.body.password,'Example1234');assert.equal(reset.body.app_metadata.must_change_password,true);assert.equal(reset.body.app_metadata.password_version,1);
+setup();assert.equal((await req({action:'create',name:'Test',role:'employee',login:'06 00 00 00 00',password:'Example1234'})).status,200);const create=calls.find(x=>x.url.endsWith('/admin/users'));assert.equal(create.body.email,'u33600000000@login.indussapp.invalid');assert.equal(create.body.email_confirm,true);assert.equal(create.body.phone,undefined);assert.equal(create.body.password,'Example1234');assert.ok(calls.some(x=>x.url.endsWith('/rest/v1/employes')));
+setup();assert.equal((await req({action:'change-password',password:'Example1234',currentPassword:'OldPassword123'})).status,200);assert.ok(calls.find(x=>x.url.includes('grant_type=password')).body.email);assert.ok(calls.some(x=>x.url.includes('logout?scope=global')));
+console.log('PASS 12 server authentication and authorization scenarios (mock Auth API)');
+// Reuse the existing DOM harness, without running its local-demo assertions.
+let harness=fs.readFileSync(path.join(__dirname,'test-planning.cjs'),'utf8').split('const q=sandbox.qa;')[0];
+harness=harness.replace('vm.createContext(sandbox);',`sandbox.location={protocol:'https:'}; sandbox.fetch=globalThis.mockFetch; vm.createContext(sandbox);`);
+harness=harness.replace('get state(){return state},','remoteLogin,initAuth,logout,get state(){return state},');
+harness+='\nglobalThis.hosted={q:sandbox.qa,elem,storage,session};';
+const frontendCalls=[];
+const frontend={require,console,__dirname,TextEncoder,globalThis:null,mockFetch:async(url,opts)=>{frontendCalls.push({url,body:opts.body&&JSON.parse(opts.body)});if(url.includes('grant_type=password'))return Response.json({access_token:'test-session'});if(url.includes('/logout'))return Response.json({});return Response.json(JSON.parse(opts.body).action==='list'?{users:[{id:uid,name:'Test',role:'direction',login:'0600000000',active:true}]}:{user:{id:uid,name:'Test',role:'direction',login:'0600000000',active:true}});}};frontend.globalThis=frontend;
+vm.runInNewContext(harness,frontend);
+const h=frontend.hosted;h.session.set('lindus_v28_mobile_session','ludovic');h.q.initAuth();assert.equal(h.q.state.currentUser,null);
+await h.q.remoteLogin('06 00 00 00 00','Example1234');assert.equal(frontendCalls[0].body.email,'u33600000000@login.indussapp.invalid');assert.equal(frontendCalls[0].body.phone,undefined);assert.equal(h.q.state.currentUser,uid);
+const saved=[...h.storage.values()].join('');assert.ok(!saved.includes('test-session'));assert.ok(!saved.includes('Example1234'));assert.equal(h.elem('loginPassword').value,'');
+h.q.logout();assert.equal(h.q.state.currentUser,null);assert.equal(h.elem('usersAdminList').innerHTML,'');
+console.log('PASS hosted startup, phone alias login, secret persistence and logout scenarios');
+})().catch(e=>{console.error(e);process.exitCode=1});
