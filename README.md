@@ -69,3 +69,7 @@ La validation SQL vérifie sous verrou le rôle actuel, l’activation, l’appa
 Installation depuis les scripts : `database/modules.sql`, puis `database/accounts-teams.sql`, puis `database/security-manager.sql`, avec les tables équipes/administrateurs déjà présentes. Sur le projet actuel, toutes ces migrations sont appliquées. Déployer ensuite les versions correspondantes des fonctions `staff-admin` et `staff-data`, avec vérification JWT active.
 
 Tests supplémentaires : `node tests/test-security.cjs`. `tests/security-sql.sql` vérifie les RPC réelles dans une transaction annulée, y compris les refus et la préservation du planning des autres équipes ; aucun compte ni pointage de test n’est conservé.
+
+Les employés affectés à l’équipe Sécu sont limités au créneau de début **22 h**, y compris en cas de plusieurs équipes ou de journée exceptionnelle. La saisie des disponibilités, la direction et le responsable sécurité appliquent cette règle. Les services déjà publiés ne sont pas déplacés automatiquement ; leurs nouvelles modifications doivent respecter 22 h.
+
+Le responsable sécurité dispose de vues Jour/Semaine/Mois, avec les mêmes tables que la direction et uniquement ses agents. Supprimer le service efface le créneau individuel et sa publication, sans toucher aux disponibilités ni aux autres employés. La direction peut supprimer tous les services ; le responsable Sécu reste limité aux agents actifs de son équipe. La prévisualisation attend la réponse du serveur avant de se fermer après publication.

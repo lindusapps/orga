@@ -14,11 +14,14 @@ async function rows(table:string,query=''){
 }
 const upsert=(table:string,body:unknown)=>api('/rest/v1/'+table,'POST',body);
 async function members(){return (await rows('staff_accounts','select=user_id,name,role,active')).map((a:any)=>({id:a.user_id,name:a.name,role:a.role,active:a.active}));}
-async function securityAgents(){
- const teams=await rows('equipes','code=eq.secu&actif=eq.true&select=id');if(teams.length!==1)return [];
+async function securityMemberIds(){
+ const teams=await rows('equipes','code=eq.secu&actif=eq.true&select=id');if(teams.length!==1)return new Set<string>();
  const links=await rows('employes_equipes','equipe_id=eq.'+teams[0].id+'&select=employes!inner(auth_user_id,actif)');
- const ids=new Set(links.filter((r:any)=>r.employes.actif).map((r:any)=>r.employes.auth_user_id));
- return (await members()).filter((p:any)=>p.role==='employee'&&p.active&&ids.has(p.id));
+ return new Set<string>(links.filter((r:any)=>r.employes.actif).map((r:any)=>r.employes.auth_user_id));
+}
+async function securityAgents(){
+ const ids=await securityMemberIds();
+ return (await members()).filter((p:any)=>p.role==='employee'&&p.active&&ids.has(p.id)).map((p:any)=>({...p,securityOnly:true}));
 }
 const fields=['customSlots','exceptionalDays','thursdayUnlocked','validated','shiftEnds','planStatus','publishedPlans','published'];
 function cleanPlan(input:any){
@@ -52,16 +55,26 @@ Deno.serve(async(req:Request)=>{
  if((claims.app_metadata?.password_version||0)!==(m.password_version||0))return reply({error:'Reconnecte-toi après le changement de mot de passe.'},401);
  const b=await req.json(),admin=m.staff_role==='direction';
  const planning=(await rows('staff_planning','id=eq.true'))[0];const plan=planning.data||{};
+ if(b.action==='shift-delete'){
+  if(!admin&&m.staff_role!=='security_manager')return reply({error:'Suppression réservée aux responsables autorisés.'},403);
+  if(!uuid(b.userId)||!Number.isSafeInteger(b.revision))throw new Error('Service invalide.');
+  const d=day(b.day);
+  if(m.staff_role==='security_manager'&&!(await securityAgents()).some((p:any)=>p.id===b.userId))return reply({error:'Suppression réservée aux agents de l’équipe Sécu.'},403);
+  if(b.revision!==planning.revision)return reply({error:'Planning modifié. Actualise avant de supprimer.'},409);
+  try{const revision=await api('/rest/v1/rpc/staff_shift_delete','POST',{p_actor_id:u.id,p_user_id:b.userId,p_day:d,p_revision:b.revision});return reply({ok:true,revision});}
+  catch{return reply({error:'Suppression refusée. Actualise le planning et vérifie les droits sur cet agent.'},409);}
+ }
  if(m.staff_role==='security_manager'){
   if(!['load','security-validate'].includes(b.action))return reply({error:'Accès limité à la validation des agents de sécurité.'},403);
   const agents=await securityAgents(),ids=new Set(agents.map((p:any)=>p.id));
   if(b.action==='load'){
    const availability=agents.length?await rows('staff_availability','user_id=in.('+agents.map((p:any)=>p.id).join(',')+')'):[];
    const publishedPlans=Object.fromEntries(Object.entries(plan.publishedPlans||{}).map(([d,v]:any)=>[d,{publishedAt:v.publishedAt,people:Object.fromEntries(Object.entries(v.people||{}).filter(([id])=>ids.has(id)).map(([id,p]:any)=>[id,{status:p.status,slot:p.slot,end:p.end}]))}]).filter(([,v]:any)=>Object.keys(v.people).length));
-   return reply({plan:{customSlots:plan.customSlots||[],exceptionalDays:Object.fromEntries(Object.keys(plan.exceptionalDays||{}).map(d=>[d,{title:'Service exceptionnel'}])),thursdayUnlocked:plan.thursdayUnlocked||{},publishedPlans},revision:planning.revision,availability,tasks:[],debriefs:[],feedback:[],clock:[],incidents:[],people:[{id:u.id,name:m.staff_name||'Responsable sécurité',role:m.staff_role,active:true},...agents],today:today()});
+   return reply({plan:{customSlots:plan.customSlots||[],exceptionalDays:Object.fromEntries(Object.keys(plan.exceptionalDays||{}).map(d=>[d,{title:'Service exceptionnel'}])),thursdayUnlocked:plan.thursdayUnlocked||{},publishedPlans},revision:planning.revision,availability:availability.map((a:any)=>({...a,slots:a.slots.filter((s:string)=>s==='22')})),tasks:[],debriefs:[],feedback:[],clock:[],incidents:[],people:[{id:u.id,name:m.staff_name||'Responsable sécurité',role:m.staff_role,active:true},...agents],today:today()});
   }
   if(!uuid(b.userId)||!ids.has(b.userId))return reply({error:'Validation réservée aux agents de l’équipe Sécu.'},403);
   const d=day(b.day);
+  if(b.slot!=='22')return reply({error:'Les agents Sécu commencent uniquement à 22 h.'},400);
   if(typeof b.slot!=='string'||typeof b.end!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(b.end)||!Number.isSafeInteger(b.revision))return reply({error:'Créneau ou heure invalide.'},400);
   if(b.revision!==planning.revision)return reply({error:'Planning modifié. Actualise avant de valider.'},409);
   try{const revision=await api('/rest/v1/rpc/staff_security_validate','POST',{p_actor_id:u.id,p_user_id:b.userId,p_day:d,p_slot:b.slot,p_end:b.end,p_revision:b.revision});return reply({ok:true,revision});}
@@ -72,18 +85,21 @@ Deno.serve(async(req:Request)=>{
   const own='user_id=eq.'+u.id;
   const [availability,tasks,debriefs,feedback,clock,incidents,people]=await Promise.all([rows('staff_availability',admin?'':own),rows('staff_tasks','day=eq.'+today()),rows('staff_debriefs',admin?'':own),rows('staff_feedback'),rows('staff_clock',admin?'':own),rows('staff_incidents',admin?'':own),admin?members():Promise.resolve([{id:u.id,name:m.staff_name||'Équipier',role:m.staff_role,active:true}])]);
   const visible=admin?plan:{customSlots:plan.customSlots||[],exceptionalDays:plan.exceptionalDays||{},thursdayUnlocked:plan.thursdayUnlocked||{},publishedPlans:Object.fromEntries(Object.entries(plan.publishedPlans||{}).filter(([,v]:any)=>v.people?.[u.id]).map(([d,v]:any)=>[d,{publishedAt:v.publishedAt,people:{[u.id]:v.people[u.id]}}]))};
-  return reply({plan:visible,revision:planning.revision,availability,tasks:admin?tasks:tasks.map(({day,task_id,done}:any)=>({day,task_id,done})),debriefs,feedback,clock,incidents,people,today:today()});
+  const securityIds=await securityMemberIds();
+  return reply({plan:visible,revision:planning.revision,availability:availability.map((a:any)=>securityIds.has(a.user_id)?{...a,slots:a.slots.filter((s:string)=>s==='22')}:a),tasks:admin?tasks:tasks.map(({day,task_id,done}:any)=>({day,task_id,done})),debriefs,feedback,clock,incidents,people:people.map((p:any)=>({...p,securityOnly:p.role==='employee'&&securityIds.has(p.id)})),today:today()});
  }
  if(b.action==='planning-save'){
   if(!admin)return reply({error:'Réservé à la direction.'},403);
   if(b.revision!==planning.revision)return reply({error:'Un autre administrateur a modifié le planning. Recharge avant de réessayer.'},409);
   const next=cleanPlan(b.data);
   const active=new Set((await members()).filter((p:any)=>p.role==='employee'&&p.active).map((p:any)=>p.id));
+  const securityIds=await securityMemberIds();
+  for(const [d,map] of Object.entries(next.validated) as any)for(const [id,slot] of Object.entries(map))if(securityIds.has(id)&&slot&&slot!=='22'&&slot!==plan.validated?.[d]?.[id])throw new Error('Les agents Sécu commencent uniquement à 22 h.');
   const av=await rows('staff_availability');
   for(const [d,snapshot] of Object.entries(next.publishedPlans) as any){
    if(JSON.stringify(snapshot)===JSON.stringify(plan.publishedPlans?.[d]))continue;
    if(!snapshot?.people||typeof snapshot.people!=='object'||Array.isArray(snapshot.people))throw new Error('Publication invalide.');
-   for(const [id,p] of Object.entries(snapshot.people) as any){if(!active.has(id)||!['present','rest','leave','absent'].includes(p.status))throw new Error('Salarié ou statut invalide.');if(p.status==='present'){if(!allowedSlots(next,d).includes(p.slot)||!av.find((a:any)=>a.user_id===id&&a.day===d)?.slots.includes(p.slot))throw new Error('Disponibilité modifiée : recharge le planning avant de publier.');if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.end))throw new Error('Heure de fin invalide.');}}
+   for(const [id,p] of Object.entries(snapshot.people) as any){if(!active.has(id)||!['present','rest','leave','absent'].includes(p.status))throw new Error('Salarié ou statut invalide.');if(p.status==='present'){if(securityIds.has(id)&&p.slot!=='22'&&JSON.stringify(p)!==JSON.stringify(plan.publishedPlans?.[d]?.people?.[id]))throw new Error('Les agents Sécu commencent uniquement à 22 h.');if(!allowedSlots(next,d).includes(p.slot)||!av.find((a:any)=>a.user_id===id&&a.day===d)?.slots.includes(p.slot))throw new Error('Disponibilité modifiée : recharge le planning avant de publier.');if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.end))throw new Error('Heure de fin invalide.');}}
    snapshot.publishedAt=new Date().toISOString();
   }
   const saved=await api('/rest/v1/staff_planning?id=eq.true&revision=eq.'+planning.revision,'PATCH',{data:next,revision:planning.revision+1,updated_at:new Date().toISOString()});
@@ -92,6 +108,7 @@ Deno.serve(async(req:Request)=>{
  }
  if(b.action==='availability'){
   const d=day(b.day);if(!Array.isArray(b.slots)||b.slots.length>43||b.slots.some((s:any)=>!allowedSlots(plan,d).includes(s)))throw new Error('Créneau fermé ou invalide.');
+  if((await securityMemberIds()).has(u.id)&&b.slots.some((s:string)=>s!=='22'))throw new Error('Les agents Sécu commencent uniquement à 22 h.');
   await upsert('staff_availability',{user_id:u.id,day:d,slots:[...new Set(b.slots)],updated_at:new Date().toISOString()});return reply({ok:true});
  }
  if(b.action==='task'){

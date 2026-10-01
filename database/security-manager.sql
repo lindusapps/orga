@@ -16,6 +16,7 @@ begin
  where e.auth_user_id=p_user_id and e.actif and t.code='secu' and t.actif
  for share of ee,e,t;
  if not found then raise exception 'Cet agent ne fait pas partie de l’équipe Sécu.'; end if;
+ if p_slot<>'22' then raise exception 'Les agents Sécu commencent uniquement à 22 h.'; end if;
  select slots into v_slots from public.staff_availability where user_id=p_user_id and day=p_day for share;
  if v_slots is null or not (v_slots ? p_slot) then raise exception 'Ce créneau ne fait pas partie des disponibilités de cet agent.'; end if;
  if not (coalesce(v_data->'exceptionalDays','{}'::jsonb) ? v_date)
