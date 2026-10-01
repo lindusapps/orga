@@ -30,15 +30,10 @@ setup();assert.equal((await req({action:'reset-password',userId:other,password:'
 setup();assert.equal((await req({action:'create',name:'Test',role:'employee',login:'06 00 00 00 00',password:'Example1234'})).status,200);const create=calls.find(x=>x.url.endsWith('/admin/users'));assert.equal(create.body.email,'u33600000000@login.indussapp.invalid');assert.equal(create.body.email_confirm,true);assert.equal(create.body.phone,undefined);assert.equal(create.body.password,'Example1234');assert.ok(calls.some(x=>x.url.endsWith('/rest/v1/employes')));
 setup();assert.equal((await req({action:'change-password',password:'Example1234',currentPassword:'OldPassword123'})).status,200);assert.ok(calls.find(x=>x.url.includes('grant_type=password')).body.email);assert.ok(calls.some(x=>x.url.includes('logout?scope=global')));
 console.log('PASS 12 server authentication and authorization scenarios (mock Auth API)');
-// Reuse the existing DOM harness, without running its local-demo assertions.
-let harness=fs.readFileSync(path.join(__dirname,'test-planning.cjs'),'utf8').split('const q=sandbox.qa;')[0];
-harness=harness.replace('vm.createContext(sandbox);',`sandbox.location={protocol:'https:'}; sandbox.fetch=globalThis.mockFetch; vm.createContext(sandbox);`);
-harness=harness.replace('get state(){return state},','remoteLogin,initAuth,logout,get state(){return state},');
-harness+='\nglobalThis.hosted={q:sandbox.qa,elem,storage,session};';
 const frontendCalls=[];
-const frontend={require,console,__dirname,TextEncoder,globalThis:null,mockFetch:async(url,opts)=>{frontendCalls.push({url,body:opts.body&&JSON.parse(opts.body)});if(url.includes('grant_type=password'))return Response.json({access_token:'test-session'});if(url.includes('/logout'))return Response.json({});return Response.json(JSON.parse(opts.body).action==='list'?{users:[{id:uid,name:'Test',role:'direction',login:'0600000000',active:true}]}:{user:{id:uid,name:'Test',role:'direction',login:'0600000000',active:true}});}};frontend.globalThis=frontend;
-vm.runInNewContext(harness,frontend);
-const h=frontend.hosted;h.session.set('lindus_v28_mobile_session','ludovic');h.q.initAuth();assert.equal(h.q.state.currentUser,null);
+const mockFetch=async(url,opts)=>{frontendCalls.push({url,body:opts.body&&JSON.parse(opts.body)});if(url.includes('grant_type=password'))return Response.json({access_token:'test-session'});if(url.includes('/logout'))return Response.json({});const action=JSON.parse(opts.body).action;if(action==='load')return Response.json({plan:{},revision:0,availability:[],tasks:[],debriefs:[],feedback:[],clock:[],incidents:[],people:[{id:uid,name:'Test',role:'direction',active:true}],today:'2026-10-01'});return Response.json(action==='list'?{users:[{id:uid,name:'Test',role:'direction',login:'0600000000',active:true}]}:{user:{id:uid,name:'Test',role:'direction',login:'0600000000',active:true}});};
+const h=require('./harness.cjs')({fetch:mockFetch});
+h.session.set('lindus_v28_mobile_session','ludovic');h.q.initAuth();assert.equal(h.q.state.currentUser,null);
 await h.q.remoteLogin('06 00 00 00 00','Example1234');assert.equal(frontendCalls[0].body.email,'u33600000000@login.indussapp.invalid');assert.equal(frontendCalls[0].body.phone,undefined);assert.equal(h.q.state.currentUser,uid);
 const saved=[...h.storage.values()].join('');assert.ok(!saved.includes('test-session'));assert.ok(!saved.includes('Example1234'));assert.equal(h.elem('loginPassword').value,'');
 h.q.logout();assert.equal(h.q.state.currentUser,null);assert.equal(h.elem('usersAdminList').innerHTML,'');

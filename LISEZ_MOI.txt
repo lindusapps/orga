@@ -1,67 +1,9 @@
-L’INDUS STAFF — PLANNING DESKTOP V30.1
-Évolution de la démo V29 fournie · 1er octobre 2026
+L’INDUS STAFF — APPLICATION CONNECTÉE
 
-NOUVEAUTÉ V30.1 — LISIBILITÉ DES DÉBRIEFS
-Texte des retours porté à 20 px sur ordinateur, prénoms à 22 px, contraste
-renforcé et interligne augmenté. Les grandes bandes de réception sont remplacées
-par un liseré latéral de 4 px : vert pour reçu, rouge pour non reçu. Le statut
-reste indiqué en petit texte. Les libellés et champs de rédaction sont agrandis.
-
-OUVRIR LA DÉMO
-1. Décompressez l’archive.
-2. Ouvrez index.html dans votre navigateur.
-3. Choisissez « Accès Direction », puis « Planning ».
-4. Sur ordinateur (largeur d’au moins 900 px), choisissez Jour, Semaine ou Mois.
-   Sous 900 px, la présentation tactile V29 est conservée.
-
-UTILISER LE PLANNING
-• Jour : un cadre par salarié, disponibilités proposées, statut et fin du service.
-• Semaine et Mois : cliquez sur une cellule pour modifier la journée du salarié.
-• Le mois comprend toutes les semaines, avec les dates des mois voisins. Le
-  calendrier se parcourt verticalement ; les sept jours partagent sa largeur.
-• Une disponibilité reste « À sélectionner ». Un horaire retenu est un brouillon.
-• « Prévisualiser le planning définitif » récapitule les horaires de la période.
-• « Valider et publier » publie la journée, la semaine ou le mois affiché.
-  En vue Mois, les jours des mois voisins ne sont pas publiés.
-• Dans le détail d’un salarié, la publication concerne toute la journée et tous
-  ses salariés : le bouton et la note le précisent.
-• Après une modification, la dernière publication reste consultable par le
-  salarié et sur l’accueil jusqu’à la prochaine publication.
-• La fin de service est modifiable ; (+1j) indique le lendemain de la date du service.
-• Les jeudis se déverrouillent créneau par créneau, dans la vue Jour ou le détail.
-• « Ajouter au planning », sous la synthèse, conserve l’ajout de créneaux
-  personnalisés et d’événements sur n’importe quelle date.
-• Les comptes Employé consultent leur propre planning publié et proposent leurs
-  disponibilités depuis la présentation existante.
-
-LIRE LA SYNTHÈSE
-Les effectifs comptent les salariés distincts dans la période. En semaine et en
-mois, le nombre de journées concernées est indiqué à côté. Les heures prévues
-incluent les brouillons. Les heures de couverture sont des heures cumulées de
-personnel, avec distinction entre horaires prévus et publiés. Les alertes
-indiquent les intervalles exacts sans personnel publié, y compris en cas de fin
-anticipée. Le minimum prévu correspond au plus petit effectif présent à tout
-instant de la plage sur les journées de service de la période.
-
-CONSERVER LES DONNÉES V29
-La clé de stockage de la V29 est conservée et les nouveaux champs sont ajoutés
-sans remplacer les comptes, tâches, disponibilités ou autres données chargées.
-Les anciens plannings publiés sont repris automatiquement lors du premier accès.
-
-Pour retrouver vos données locales, conservez une copie de l’ancien fichier,
-puis remplacez son index.html au même emplacement par celui de la V30 et utilisez
-le même navigateur et le même profil. En ouverture locale (file://), le partage
-du stockage entre fichiers dépend du navigateur : un autre chemin peut ouvrir
-un stockage distinct. L’archive ne contient pas les données enregistrées dans
-votre navigateur. Ne supprimez pas les données du navigateur lors de la mise à jour.
-
-PORTÉE DE CETTE VERSION
-Comme la V29, cette application reste une démo autonome : aucune donnée n’est
-transmise à un serveur. Les rôles limitent l’interface, sans constituer une
-sécurité serveur. Aucun partage entre appareils n’a été ajouté.
-
-VÉRIFICATIONS
-24 tests de logique automatisés passent. Le logo et les écrans hors accueil, planning et débrief
-ont été conservés. Le rendu réel à 1366 × 768 et 1920 × 1080, la fixation
-des en-têtes au défilement et le rendu mobile restent à vérifier dans un navigateur.
-Le détail et la procédure figurent dans VALIDATION.md.
+Ouvrir https://indussapp.vercel.app
+Connexion : numéro de téléphone et mot de passe choisi.
+Il n’y a plus d’accès de démonstration.
+La direction crée les comptes et réinitialise les mots de passe dans Admin.
+Les plannings, disponibilités, tâches, débriefs, pointages et signalements sont enregistrés dans Supabase.
+Les rappels automatiques ne sont pas configurés.
+Le fichier HTML local seul ne permet plus de se connecter : utiliser le site hébergé.
