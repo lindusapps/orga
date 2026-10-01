@@ -2,7 +2,7 @@
 
 Application statique avec planning jour/semaine/mois et débriefs lisibles.
 
-## Connexion hébergée (en préparation)
+## Connexion hébergée
 
 L’identifiant est un numéro de téléphone et le mot de passe est choisi directement.
 Aucun SMS, Twilio ou code par e-mail n’est utilisé dans ce parcours.
@@ -11,7 +11,7 @@ Supabase Auth utilise en interne un alias réservé `u<numero_international_sans
 
 Les comptes doivent être créés par un administrateur via l’API Admin avec `email_confirm: true`. Le mot de passe n’est ni intégré au HTML ni stocké dans les tables métier. L’alias ne doit jamais servir à envoyer des invitations ou des messages de récupération.
 
-Le premier compte doit être créé dans le tableau de bord Supabase, puis recevoir ses métadonnées serveur `staff_role: direction`, `staff_name`, `staff_login`, `staff_active: true`, `must_change_password: false`, `password_version: 0`. Relier ensuite son UUID à sa fiche `public.administrateurs` et passer la fiche à `actif`. La fiche seule ne donne aucun droit. Ce premier compte n’est pas encore créé.
+Le premier compte doit être créé dans le tableau de bord Supabase, puis recevoir ses métadonnées serveur `staff_role: direction`, `staff_name`, `staff_login`, `staff_active: true`, `must_change_password: false`, `password_version: 0`. Relier ensuite son UUID à sa fiche `public.administrateurs` et passer la fiche à `actif`. La fiche seule ne donne aucun droit. Le premier compte administrateur a été créé et relié dans Supabase.
 
 Déployer `supabase/functions/staff-admin/index.ts` avec `verify_jwt=true`. La fonction vérifie également l’utilisateur courant auprès d’Auth, son rôle dans app_metadata et la version du mot de passe. La clé service reste dans le runtime Supabase. CORS autorise seulement les domaines de production listés dans le fichier.
 
@@ -19,7 +19,7 @@ Dans Admin, la direction choisit un mot de passe lors de la création ou de la r
 
 ## Limites et mise en production
 
-Cette branche ne doit pas remplacer la production avant la création du premier compte et un essai réel de connexion/création/réinitialisation. Les tests Auth sont simulés : le parcours complet n’est pas encore validé avec le service réel.
+Le premier compte est actif. Les tests automatisés Auth sont simulés ; le point d’entrée réel refuse les requêtes non authentifiées et accepte le précontrôle CORS du domaine de production. Un essai utilisateur de connexion/création/réinitialisation avec le mot de passe choisi reste à réaliser.
 
 Les plannings, tâches, débriefs et pointages restent une démonstration locale. Ils ne sont pas synchronisés entre appareils par cette évolution. Les tables équipes et administrateurs ont été créées séparément dans Supabase.
 
