@@ -371,7 +371,7 @@ body.keyboard-open .top{position:relative}
  .v30-navigation input{color-scheme:dark;background:#101014;color:#eee;border:1px solid #45434c;padding:9px;border-radius:9px;max-width:150px}
  #v30-period{font-size:18px;margin:18px 0 6px}
  .v30-legend{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
- .v30-scroll{border:1px solid #3b3943;border-radius:14px;overflow:auto;max-height:65vh;scrollbar-gutter:stable;background:#111115;overscroll-behavior:contain}
+ .v30-scroll{border:1px solid #3b3943;border-radius:14px;overflow:visible;max-height:none;background:#111115}
  .v30-scroll:focus-visible{outline:2px solid #d8aa50}
  .v30-table{table-layout:fixed;width:100%;border-spacing:0;font-size:clamp(10px,.78vw,13px)}
  .v30-table col:first-child{width:var(--name-width)}
@@ -466,8 +466,8 @@ body.keyboard-open .top{position:relative}
  .page-security .v30-segments{display:flex;gap:4px}
  .page-security .v30-segments button{border:1px solid var(--line);border-radius:9px;padding:10px;background:var(--panel);color:var(--text)}
  .page-security .v30-segments button[aria-pressed=true]{background:var(--gold);color:#17130c}
- .page-security .v30-scroll{overflow:auto;max-height:60vh;border:1px solid var(--line);border-radius:12px}
- .page-security .v30-table{width:100%;min-width:850px;table-layout:fixed;border-spacing:0}
+ .page-security .v30-scroll{overflow:visible;max-height:none;border:1px solid var(--line);border-radius:12px}
+ .page-security .v30-table{width:100%;min-width:0;table-layout:fixed;border-spacing:0}
  .page-security .v30-table col:first-child{width:120px}
  .page-security .v30-table th,.page-security .v30-table td{padding:5px;border-bottom:1px solid var(--line)}
  .page-security .v30-table th{background:var(--panel);font-size:12px}
@@ -475,6 +475,32 @@ body.keyboard-open .top{position:relative}
  .page-security .v30-date{display:block}
  .page-security .v30-cell{display:flex;flex-direction:column;gap:5px;width:100%;min-height:80px;padding:8px;border:1px solid var(--line);border-radius:8px;text-align:left;font-size:12px}
  .page-security .v30-week-label{padding:12px;color:var(--gold)}
+}
+
+/* The calendar follows the page instead of creating a second scrolling area. */
+#planningDesktop,#v30-calendar,#securityCalendar{min-width:0;max-width:100%}
+#planningDesktop .v30-scroll,.page-security .v30-scroll{width:100%;max-width:100%;max-height:none;overflow:visible}
+#planningDesktop .v30-table,.page-security .v30-table{width:100%;min-width:0;max-width:100%;table-layout:fixed}
+#planningDesktop .v30-cell,.page-security .v30-cell{min-width:0;white-space:normal;overflow-wrap:anywhere}
+#planningDesktop .v30-table thead th{top:80px}
+.page-security .v30-table thead th{top:80px}
+@media(min-width:900px) and (max-width:1200px){
+ #planningDesktop{--name-width:100px}
+ #planningDesktop .v30-cell,.page-security .v30-cell{min-height:56px;gap:3px;padding:5px 3px}
+ #planningDesktop .v30-table tbody th{padding:8px 6px}
+}
+@media(max-width:899px){
+ .page-security .v30-table,.page-security .v30-table tbody{display:block}
+ .page-security .v30-table colgroup,.page-security .v30-table thead{display:none}
+ .page-security .v30-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px;border-bottom:1px solid var(--line)}
+ .page-security .v30-table tbody th{grid-column:1/-1;position:static;padding:6px 0;font-size:16px;background:transparent}
+ .page-security .v30-table td{min-width:0;padding:0;border:0}
+ .page-security .v30-table td::before{content:attr(data-day);display:block;padding:5px 3px;color:var(--muted);font-size:12px;font-weight:700}
+ .page-security .v30-cell{min-height:74px;height:calc(100% - 28px);font-size:13px}
+ .page-security .v30-week-label{border-top:1px solid var(--line);font-weight:750}
+}
+@media(min-width:600px) and (max-width:899px){
+ .page-security .v30-table tbody tr{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
 </style>
 </head>
@@ -1135,7 +1161,7 @@ body.keyboard-open .top{position:relative}
   function v30Table(days,presentation=v30Presentation,focusDate=state.dirDate,view=state.calendarView){
     const today=v30ISO(new Date()),month=focusDate.slice(0,7);
     const dateClass=d=>[isExceptional(d)?'v30-event':'',d.slice(0,7)!==month&&view==='month'?'v30-out':'',d===today?'v30-today':''].join(' ');
-    return `<table class="v30-table" aria-label="Équipe du ${shortDate(days[0])} au ${shortDate(days[6])}"><colgroup><col>${days.map(()=>'<col>').join('')}</colgroup><thead><tr><th scope="col">Salariés</th>${days.map(d=>`<th scope="col" class="${dateClass(d)}">${v30Esc(dayName(d))}<span class="v30-date">${v30Date(d).getDate()} ${d.slice(0,7)!==month?v30Date(d).toLocaleDateString('fr-FR',{month:'short'}):''}</span>${isExceptional(d)?'<span class="v30-event-label" title="'+v30Esc(eventTitle(d))+'">ÉVÉNEMENT</span>':''}</th>`).join('')}</tr></thead><tbody>${employeeEntries().map(([k,u])=>`<tr><th scope="row">${v30Esc(u.name)}</th>${days.map(d=>{const p=presentation(k,d);return `<td class="${dateClass(d)}"><button type="button" class="v30-cell v30-${p.color}" data-v30-cell data-person="${v30Esc(k)}" data-date="${d}" aria-label="${v30Esc(u.name+', '+fmtDate(d)+', '+p.text+', '+p.detail+', '+p.stage+(isExceptional(d)?', ÉVÉNEMENT '+eventTitle(d):''))}"><strong>${p.text}</strong>${p.detail?'<small>'+v30Esc(p.detail)+'</small>':''}<small>${p.slot?formatHours(v30Hours(p))+' · ':''}${p.stage||'—'}</small></button></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
+    return `<table class="v30-table" aria-label="Équipe du ${shortDate(days[0])} au ${shortDate(days[6])}"><colgroup><col>${days.map(()=>'<col>').join('')}</colgroup><thead><tr><th scope="col">Salariés</th>${days.map(d=>`<th scope="col" class="${dateClass(d)}">${v30Esc(dayName(d))}<span class="v30-date">${v30Date(d).getDate()} ${d.slice(0,7)!==month?v30Date(d).toLocaleDateString('fr-FR',{month:'short'}):''}</span>${isExceptional(d)?'<span class="v30-event-label" title="'+v30Esc(eventTitle(d))+'">ÉVÉNEMENT</span>':''}</th>`).join('')}</tr></thead><tbody>${employeeEntries().map(([k,u])=>`<tr><th scope="row">${v30Esc(u.name)}</th>${days.map(d=>{const p=presentation(k,d);return `<td class="${dateClass(d)}" data-day="${v30Esc(dayName(d)+' · '+shortDate(d))}"><button type="button" class="v30-cell v30-${p.color}" data-v30-cell data-person="${v30Esc(k)}" data-date="${d}" aria-label="${v30Esc(u.name+', '+fmtDate(d)+', '+p.text+', '+p.detail+', '+p.stage+(isExceptional(d)?', ÉVÉNEMENT '+eventTitle(d):''))}"><strong>${p.text}</strong>${p.detail?'<small>'+v30Esc(p.detail)+'</small>':''}<small>${p.slot?formatHours(v30Hours(p))+' · ':''}${p.stage||'—'}</small></button></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
   }
   function v30Summary(days){
     const counts={present:0,leave:0,absent:0},distinct={present:new Set(),leave:new Set(),absent:new Set()};let hours=0;
@@ -1166,7 +1192,7 @@ body.keyboard-open .top{position:relative}
     else{
       let body='';if(state.calendarView==='week')body=v30Table(days);
       else{const first=v30Monday(days[0]),last=v30Add(v30Monday(days[days.length-1]),6);for(let a=first;a<=last;a=v30Add(a,7))body+=`<div class="v30-week-label">${shortDate(a)} — ${shortDate(v30Add(a,6))}</div>`+v30Table(v30Days(a,v30Add(a,6)))}
-      calendar.innerHTML=`<div class="v30-scroll" tabindex="0" role="region" aria-label="Calendrier ${state.calendarView==='month'?'mensuel':'hebdomadaire'} · défiler verticalement">${body}</div>`;
+      calendar.innerHTML=`<div class="v30-scroll" tabindex="0" role="region" aria-label="Calendrier ${state.calendarView==='month'?'mensuel':'hebdomadaire'}">${body}</div>`;
       calendar.querySelector('.v30-scroll').scrollTop=oldScroll;
     }
     document.getElementById('v30-summary').innerHTML=v30Summary(days);
