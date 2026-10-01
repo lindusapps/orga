@@ -446,8 +446,8 @@ body.keyboard-open .top{position:relative}
 .security-only,.page-security{display:none}
 .app.security-access .page{display:none!important}
 .app.security-access .page-security,.app.security-access .security-only{display:block!important}
-.app.security-access .bottom .navBtn{display:none!important}
-.app.security-access .bottom .navBtn.security-only{display:flex!important}
+.app.dynamic-access.security-access .bottom{display:none!important}
+@media(min-width:900px){.app.security-access .content{width:calc(100% - 48px)!important;margin-left:24px!important;margin-right:24px!important}}
 .security-agent{margin:16px 0;padding:22px;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:16px;background:var(--card)}
 .security-agent h3{margin:0 0 10px;font-size:22px}
 .security-agent form{display:flex;align-items:end;gap:16px;flex-wrap:wrap}
@@ -604,7 +604,7 @@ body.keyboard-open .top{position:relative}
 </div>
 </section>
 </main>
-<nav class="bottom"><label class="navBtn security-only" for="page-home" aria-label="Équipe Sécu"><span>✓</span><small>Équipe Sécu</small></label><label class="navBtn" for="page-home" aria-label="Accueil"><span>⌂</span><small>Accueil</small></label><label class="navBtn" for="page-planning" aria-label="Planning"><span>▦</span><small>Planning</small></label><label class="navBtn" for="page-tasks" aria-label="Tâches"><span>✓</span><small>Tâches</small></label><label class="navBtn" for="page-cocktails" aria-label="Cocktails"><span>🍸</span><small>Cocktails</small></label><label class="navBtn" for="page-debrief" aria-label="Débrief"><span>✎</span><small>Débrief</small></label><label class="navBtn adminNav" for="page-admin" aria-label="Administration"><span>⚙</span><small>Admin</small></label></nav>
+<nav class="bottom"><label class="navBtn" for="page-home" aria-label="Accueil"><span>⌂</span><small>Accueil</small></label><label class="navBtn" for="page-planning" aria-label="Planning"><span>▦</span><small>Planning</small></label><label class="navBtn" for="page-tasks" aria-label="Tâches"><span>✓</span><small>Tâches</small></label><label class="navBtn" for="page-cocktails" aria-label="Cocktails"><span>🍸</span><small>Cocktails</small></label><label class="navBtn" for="page-debrief" aria-label="Débrief"><span>✎</span><small>Débrief</small></label><label class="navBtn adminNav" for="page-admin" aria-label="Administration"><span>⚙</span><small>Admin</small></label></nav>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </div>
 <dialog id="resetAccountDialog" class="card" style="width:min(92vw,480px);color:var(--text);background:var(--card);border:1px solid var(--line)"><form id="resetAccountForm"><h2>Réinitialiser le mot de passe</h2><p id="resetAccountName"></p><div class="field"><label for="resetAccountPassword">Nouveau mot de passe</label><input type="password" id="resetAccountPassword" required minlength="10" autocomplete="new-password"/></div><div class="field"><label for="resetAccountPassword2">Confirmer le mot de passe</label><input type="password" id="resetAccountPassword2" required minlength="10" autocomplete="new-password"/></div><p class="muted">L’ancien mot de passe sera remplacé. La personne devra choisir son propre mot de passe à sa prochaine connexion.</p><p id="resetAccountError" role="alert"></p><button class="btn" type="submit">Enregistrer le mot de passe</button><button class="btn ghost" type="button" id="cancelAccountReset">Annuler</button></form></dialog>
