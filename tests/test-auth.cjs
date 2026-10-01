@@ -1,6 +1,14 @@
 const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),path=require('path');
 const {stripTypeScriptTypes}=require('node:module');
 const crypto=require('node:crypto').webcrypto;
+// The browser enforces this policy before fetch reaches the mock or real Auth API.
+const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+const csp=html.match(/<meta content="([^"]+)" http-equiv="Content-Security-Policy"/)[1];
+const directives=Object.fromEntries(csp.split(';').map(s=>s.trim().split(/\s+/)).filter(v=>v[0]).map(([k,...v])=>[k,v]));
+assert.deepEqual(directives['connect-src'],["'self'"],'Hosted Auth and data requests must reach the same-origin proxy without allowing unrelated hosts');
+assert.deepEqual(directives['default-src'],["'none'"]);
+assert.deepEqual(directives['form-action'],["'none'"]);
+console.log('PASS browser policy allows same-origin API calls and preserves default restrictions');
 const source=fs.readFileSync(path.join(__dirname,'../supabase/functions/staff-admin/index.ts'),'utf8');
 const uid='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-222222222222';
 let handler,actor,calls=[],failAuth=false;
