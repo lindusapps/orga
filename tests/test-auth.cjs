@@ -16,6 +16,11 @@ const token=(version=0)=>'header.'+Buffer.from(JSON.stringify({app_metadata:{pas
 const context={Deno:{env:{get:n=>n==='SUPABASE_URL'?'https://project.example':'server-secret'},serve:fn=>handler=fn},Request,Response,crypto,atob,fetch:async(url,opts)=>{
  calls.push({url,opts,body:opts.body?JSON.parse(opts.body):undefined});
  if(url.endsWith('/auth/v1/user')&&opts.method==='GET')return Response.json(actor||{},{status:failAuth?401:200});
+ if(url.includes('/rest/v1/staff_accounts?'))return Response.json([{user_id:actor.id,name:actor.app_metadata.staff_name,login:actor.app_metadata.staff_login,role:actor.app_metadata.staff_role,active:actor.app_metadata.staff_active!==false,revision:0}]);
+ if(url.includes('/rest/v1/equipes?'))return Response.json([{id:other,code:'secu',nom:'Équipe Sécu',actif:true}]);
+ if(url.includes('/rest/v1/staff_roles?'))return Response.json([{code:'employee',label:'Employé'},{code:'direction',label:'Direction'},{code:'security_manager',label:'Responsable sécurité'}]);
+ if(url.includes('/rest/v1/employes_equipes?'))return Response.json([]);
+ if(url.includes('/rest/v1/rpc/'))return Response.json(1);
  if(url.includes('/admin/users?page='))return Response.json({users:[actor]});
  if(url.endsWith('/admin/users/'+other)&&opts.method==='GET')return Response.json({id:other,app_metadata:{staff_role:'employee'}});
  if(url.endsWith('/admin/users')&&opts.method==='POST')return Response.json({id:other,...JSON.parse(opts.body)});
@@ -26,7 +31,7 @@ const req=async(body,version=0)=>{const r=await handler(new Request('https://pro
 function setup(role='direction',extra={}){actor={id:uid,email:'u33600000000@login.indussapp.invalid',app_metadata:{staff_role:role,staff_login:'0600000000',staff_name:'Test',...extra}};calls=[];failAuth=false;}
 (async()=>{
 setup();failAuth=true;assert.equal((await req({action:'list'})).status,401);
-setup('employee');assert.equal((await req({action:'reset-password',userId:other,password:'Example1234'})).status,403);assert.equal(calls.length,1);
+setup('employee');assert.equal((await req({action:'reset-password',userId:other,password:'Example1234'})).status,403);assert.equal(calls.length,2);
 setup('employee');actor.user_metadata={staff_role:'direction'};assert.equal((await req({action:'create'})).status,403);
 setup('direction',{staff_active:false});assert.equal((await req({action:'list'})).status,403);
 setup('direction',{must_change_password:true});assert.equal((await req({action:'list'})).status,403);
@@ -35,7 +40,7 @@ setup();assert.equal((await req({action:'list'})).data.users[0].login,'060000000
 setup();assert.equal((await req({action:'reset-password',userId:uid,password:'Example1234'})).status,400);
 setup();assert.equal((await req({action:'reset-password',userId:other,password:'weak'})).status,400);assert.ok(!calls.some(x=>x.opts.method==='PUT'));
 setup();assert.equal((await req({action:'reset-password',userId:other,password:'Example1234'})).status,200);const reset=calls.find(x=>x.opts.method==='PUT');assert.equal(reset.body.password,'Example1234');assert.equal(reset.body.app_metadata.must_change_password,true);assert.equal(reset.body.app_metadata.password_version,1);
-setup();assert.equal((await req({action:'create',name:'Test',role:'employee',login:'06 00 00 00 00',password:'Example1234'})).status,200);const create=calls.find(x=>x.url.endsWith('/admin/users'));assert.equal(create.body.email,'u33600000000@login.indussapp.invalid');assert.equal(create.body.email_confirm,true);assert.equal(create.body.phone,undefined);assert.equal(create.body.password,'Example1234');assert.ok(calls.some(x=>x.url.endsWith('/rest/v1/employes')));
+setup();assert.equal((await req({action:'create',name:'Test',role:'employee',teamIds:[],login:'06 00 00 00 00',password:'Example1234'})).status,200);const create=calls.find(x=>x.url.endsWith('/admin/users'));assert.equal(create.body.email,'u33600000000@login.indussapp.invalid');assert.equal(create.body.email_confirm,true);assert.equal(create.body.phone,undefined);assert.equal(create.body.password,'Example1234');assert.ok(calls.some(x=>x.url.endsWith('/rest/v1/rpc/staff_account_register')));
 setup();assert.equal((await req({action:'change-password',password:'Example1234',currentPassword:'OldPassword123'})).status,200);assert.ok(calls.find(x=>x.url.includes('grant_type=password')).body.email);assert.ok(calls.some(x=>x.url.includes('logout?scope=global')));
 console.log('PASS 12 server authentication and authorization scenarios (mock Auth API)');
 const frontendCalls=[];

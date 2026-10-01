@@ -13,7 +13,13 @@ async function rows(table:string,query=''){
  const all=[];for(let offset=0;;offset+=1000){const batch=await api('/rest/v1/'+table+'?'+query+(query?'&':'')+'limit=1000&offset='+offset);all.push(...batch);if(batch.length<1000)break;}return all;
 }
 const upsert=(table:string,body:unknown)=>api('/rest/v1/'+table,'POST',body);
-async function members(){const out=[];for(let p=1;;p++){const x=await api('/auth/v1/admin/users?page='+p+'&per_page=100');out.push(...x.users.filter((u:any)=>['employee','direction'].includes(u.app_metadata?.staff_role)).map((u:any)=>({id:u.id,name:u.app_metadata.staff_name||'Équipier',role:u.app_metadata.staff_role,active:u.app_metadata.staff_active!==false})));if(x.users.length<100)break;}return out;}
+async function members(){return (await rows('staff_accounts','select=user_id,name,role,active')).map((a:any)=>({id:a.user_id,name:a.name,role:a.role,active:a.active}));}
+async function securityAgents(){
+ const teams=await rows('equipes','code=eq.secu&actif=eq.true&select=id');if(teams.length!==1)return [];
+ const links=await rows('employes_equipes','equipe_id=eq.'+teams[0].id+'&select=employes!inner(auth_user_id,actif)');
+ const ids=new Set(links.filter((r:any)=>r.employes.actif).map((r:any)=>r.employes.auth_user_id));
+ return (await members()).filter((p:any)=>p.role==='employee'&&p.active&&ids.has(p.id));
+}
 const fields=['customSlots','exceptionalDays','thursdayUnlocked','validated','shiftEnds','planStatus','publishedPlans','published'];
 function cleanPlan(input:any){
  if(!input||typeof input!=='object'||JSON.stringify(input).length>500000)throw new Error('Planning invalide ou trop volumineux.');
@@ -38,12 +44,30 @@ Deno.serve(async(req:Request)=>{
  try{
  const token=(req.headers.get('Authorization')||'').replace(/^Bearer /,'');let u;
  try{u=await api('/auth/v1/user','GET',undefined,token);}catch{return reply({error:'Reconnecte-toi pour continuer.'},401);}
- const m=u.app_metadata||{};
- if(u.is_anonymous||!uuid(u.id)||!['direction','employee'].includes(m.staff_role)||m.staff_active===false||m.must_change_password)return reply({error:'Accès refusé.'},403);
+ const records=await rows('staff_accounts','user_id=eq.'+u.id+'&select=name,role,active');
+ if(records.length!==1)return reply({error:'Compte non autorisé.'},403);
+ const m={...u.app_metadata,staff_role:records[0].role,staff_name:records[0].name,staff_active:records[0].active};
+ if(u.is_anonymous||!uuid(u.id)||!['direction','employee','security_manager'].includes(m.staff_role)||m.staff_active===false||m.must_change_password)return reply({error:'Accès refusé.'},403);
  const claims=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
  if((claims.app_metadata?.password_version||0)!==(m.password_version||0))return reply({error:'Reconnecte-toi après le changement de mot de passe.'},401);
  const b=await req.json(),admin=m.staff_role==='direction';
  const planning=(await rows('staff_planning','id=eq.true'))[0];const plan=planning.data||{};
+ if(m.staff_role==='security_manager'){
+  if(!['load','security-validate'].includes(b.action))return reply({error:'Accès limité à la validation des agents de sécurité.'},403);
+  const agents=await securityAgents(),ids=new Set(agents.map((p:any)=>p.id));
+  if(b.action==='load'){
+   const availability=agents.length?await rows('staff_availability','user_id=in.('+agents.map((p:any)=>p.id).join(',')+')'):[];
+   const publishedPlans=Object.fromEntries(Object.entries(plan.publishedPlans||{}).map(([d,v]:any)=>[d,{publishedAt:v.publishedAt,people:Object.fromEntries(Object.entries(v.people||{}).filter(([id])=>ids.has(id)).map(([id,p]:any)=>[id,{status:p.status,slot:p.slot,end:p.end}]))}]).filter(([,v]:any)=>Object.keys(v.people).length));
+   return reply({plan:{customSlots:plan.customSlots||[],exceptionalDays:Object.fromEntries(Object.keys(plan.exceptionalDays||{}).map(d=>[d,{title:'Service exceptionnel'}])),thursdayUnlocked:plan.thursdayUnlocked||{},publishedPlans},revision:planning.revision,availability,tasks:[],debriefs:[],feedback:[],clock:[],incidents:[],people:[{id:u.id,name:m.staff_name||'Responsable sécurité',role:m.staff_role,active:true},...agents],today:today()});
+  }
+  if(!uuid(b.userId)||!ids.has(b.userId))return reply({error:'Validation réservée aux agents de l’équipe Sécu.'},403);
+  const d=day(b.day);
+  if(typeof b.slot!=='string'||typeof b.end!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(b.end)||!Number.isSafeInteger(b.revision))return reply({error:'Créneau ou heure invalide.'},400);
+  if(b.revision!==planning.revision)return reply({error:'Planning modifié. Actualise avant de valider.'},409);
+  try{const revision=await api('/rest/v1/rpc/staff_security_validate','POST',{p_actor_id:u.id,p_user_id:b.userId,p_day:d,p_slot:b.slot,p_end:b.end,p_revision:b.revision});return reply({ok:true,revision});}
+  catch{return reply({error:'Validation refusée : actualise et vérifie l’équipe, le créneau et les disponibilités.'},409);}
+ }
+ if(b.action==='security-validate')return reply({error:'Utilise ton espace de planning autorisé.'},403);
  if(b.action==='load'){
   const own='user_id=eq.'+u.id;
   const [availability,tasks,debriefs,feedback,clock,incidents,people]=await Promise.all([rows('staff_availability',admin?'':own),rows('staff_tasks','day=eq.'+today()),rows('staff_debriefs',admin?'':own),rows('staff_feedback'),rows('staff_clock',admin?'':own),rows('staff_incidents',admin?'':own),admin?members():Promise.resolve([{id:u.id,name:m.staff_name||'Équipier',role:m.staff_role,active:true}])]);

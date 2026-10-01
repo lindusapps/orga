@@ -6,6 +6,8 @@ const source=fs.readFileSync(require('path').join(__dirname,'../supabase/functio
 vm.runInNewContext(stripTypeScriptTypes(source),{Deno:{env:{get:n=>n==='SUPABASE_URL'?'https://project.example':'server-secret'},serve:f=>handler=f},Request,Response,atob,fetch:async(url,o)=>{
  const body=o.body&&JSON.parse(o.body);calls.push({url,method:o.method,body});
  if(url.endsWith('/auth/v1/user'))return actor?Response.json(actor):Response.json({},{status:401});
+ if(url.includes('/staff_accounts?user_id=eq.'))return Response.json([{user_id:actor.id,name:actor.app_metadata.staff_name,role:actor.app_metadata.staff_role,active:actor.app_metadata.staff_active!==false}]);
+ if(url.includes('/staff_accounts?'))return Response.json([{user_id:uid,name:'A',role:'employee',active:true},{user_id:other,name:'B',role:'employee',active:true}]);
  if(url.includes('/admin/users?'))return Response.json({users:[{id:uid,app_metadata:{staff_role:'employee',staff_name:'A'}},{id:other,app_metadata:{staff_role:'employee',staff_name:'B'}}]});
  if(o.method==='GET'){
   if(url.includes('/staff_planning?'))return Response.json([{data:plan,revision}]);
