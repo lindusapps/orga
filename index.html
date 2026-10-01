@@ -448,6 +448,9 @@ body.keyboard-open .top{position:relative}
 .app.security-access .page-security,.app.security-access .security-only{display:block!important}
 .app.dynamic-access.security-access .bottom{display:none!important}
 @media(min-width:900px){.app.security-access .content{width:calc(100% - 48px)!important;margin-left:24px!important;margin-right:24px!important}}
+.page-security{--name-width:clamp(110px,12vw,190px)}
+.page-security .v30-cell[aria-current="date"]{outline:2px solid var(--gold);outline-offset:-2px}
+.page-security button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .security-agent{margin:16px 0;padding:22px;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:16px;background:var(--card)}
 .security-agent h3{margin:0 0 10px;font-size:22px}
 .security-agent form{display:flex;align-items:end;gap:16px;flex-wrap:wrap}
@@ -457,6 +460,22 @@ body.keyboard-open .top{position:relative}
 #newUserTeams,#editAccountTeams{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px}
 .field .security-team-choice{font-size:14px;color:var(--text)}
 .field select{min-height:46px}
+
+@media(max-width:899px){
+ .page-security .v30-toolbar,.page-security .v30-navigation{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+ .page-security .v30-segments{display:flex;gap:4px}
+ .page-security .v30-segments button{border:1px solid var(--line);border-radius:9px;padding:10px;background:var(--panel);color:var(--text)}
+ .page-security .v30-segments button[aria-pressed=true]{background:var(--gold);color:#17130c}
+ .page-security .v30-scroll{overflow:auto;max-height:60vh;border:1px solid var(--line);border-radius:12px}
+ .page-security .v30-table{width:100%;min-width:850px;table-layout:fixed;border-spacing:0}
+ .page-security .v30-table col:first-child{width:120px}
+ .page-security .v30-table th,.page-security .v30-table td{padding:5px;border-bottom:1px solid var(--line)}
+ .page-security .v30-table th{background:var(--panel);font-size:12px}
+ .page-security .v30-table tbody th{position:sticky;left:0;z-index:2}
+ .page-security .v30-date{display:block}
+ .page-security .v30-cell{display:flex;flex-direction:column;gap:5px;width:100%;min-height:80px;padding:8px;border:1px solid var(--line);border-radius:8px;text-align:left;font-size:12px}
+ .page-security .v30-week-label{padding:12px;color:var(--gold)}
+}
 </style>
 </head>
 <body class="splash-lock auth-locked">
@@ -519,8 +538,9 @@ body.keyboard-open .top{position:relative}
 <main class="content"><div class="notice" style="display:flex;justify-content:space-between;align-items:center;gap:12px"><span id="cloudStatus" role="status">Connexion requise</span><button class="btn ghost" type="button" id="cloudRefresh">Actualiser</button></div>
 <section class="page page-security" aria-label="Validation équipe sécurité">
 <div class="section-title"><h1>Validation · Équipe Sécu</h1><span class="pill info">Responsable sécurité</span></div>
-<p class="muted">Validez le créneau et l’heure de fin de chaque agent de sécurité. Chaque validation publie uniquement le service de cet agent.</p>
-<div class="field"><label for="securityDay">Date du service</label><input type="date" id="securityDay"/></div>
+<p class="muted">Consultez les disponibilités et les services publiés de vos agents. Validez leur début à 22 h et leur heure de fin. Chaque validation publie uniquement le service de cet agent.</p>
+<div class="v30-toolbar" id="securityToolbar"><div class="v30-segments" aria-label="Vue du calendrier sécurité"><button type="button" data-security-view="day">Jour</button><button type="button" data-security-view="week">Semaine</button><button type="button" data-security-view="month" aria-pressed="true">Mois</button></div><div class="v30-navigation"><button type="button" class="btn ghost" data-security-nav="-1" aria-label="Période précédente">←</button><button type="button" class="btn ghost" id="securityToday">Aujourd’hui</button><button type="button" class="btn ghost" data-security-nav="1" aria-label="Période suivante">→</button><label for="securityDay" class="small">Date du service</label><input type="date" id="securityDay"/></div></div>
+<h2 id="securityPeriod"></h2><p class="muted small">Cliquez sur une case pour valider le service de l’agent. Début à 22 h uniquement.</p><div id="securityCalendar"></div><h2 id="securitySelectedDay" style="margin-top:22px"></h2>
 <div id="securityMessage" role="status" aria-live="polite"></div><div id="securityAgents"></div>
 </section>
 <section class="page page-home">
@@ -547,7 +567,7 @@ body.keyboard-open .top{position:relative}
  <div id="v30-calendar"></div><div id="v30-summary"></div><div id="v30-message" role="status" aria-live="polite"></div>
 </div>
 <dialog id="v30-editor" class="v30-dialog" aria-labelledby="v30-editor-title"><header><h2 id="v30-editor-title">Détail du service</h2><button type="button" class="btn ghost" data-v30-close>Fermer</button></header><div id="v30-editor-body"></div></dialog>
-<dialog id="v30-preview" class="v30-dialog" aria-labelledby="v30-preview-title"><header><h2 id="v30-preview-title">Prévisualiser le planning définitif</h2><button type="button" class="btn ghost" data-v30-close>Fermer</button></header><p class="v30-note" id="v30-preview-period"></p><div id="v30-preview-body"></div><div class="v30-actions"><button type="button" class="btn" id="v30-preview-publish">Valider et publier</button></div></dialog>
+<dialog id="v30-preview" class="v30-dialog" aria-labelledby="v30-preview-title"><header><h2 id="v30-preview-title">Prévisualiser le planning définitif</h2><button type="button" class="btn ghost" data-v30-close>Fermer</button></header><p class="v30-note" id="v30-preview-period"></p><div id="v30-preview-body"></div><p id="v30-preview-message" role="status" aria-live="polite"></p><div class="v30-actions"><button type="button" class="btn" id="v30-preview-publish">Valider et publier</button></div></dialog>
 <div class="section-title v30-legacy"><h2>Validation du planning · jour par jour</h2><span class="pill info">Direction</span></div>
 <details class="details add-planning"><summary>＋ Ajouter au planning</summary><div>
 <div class="field"><label>Type d’ajout</label><select id="addPlanningType"><option value="slot">Créneau horaire</option><option value="event">Journée exceptionnelle / événement</option></select></div>
@@ -732,7 +752,7 @@ body.keyboard-open .top{position:relative}
     if(result.user.role==='direction'&&!result.user.mustChange)await refreshRemoteAccounts();
     document.getElementById('loginPassword').value='';if(!result.user.mustChange){state.currentUser=result.user.id;try{await loadCloud(true);}catch(e){state.currentUser=null;throw e;}}startAuthenticatedSession(result.user.id);
   }
-  async function refreshRemoteAccounts(){const data=await accountRequest('list');state.users=Object.fromEntries(data.users.map(u=>[u.id,u]));accountTeams=data.teams||[];accountRoles=data.roles||[];renderAccountFields();}
+  async function refreshRemoteAccounts(){const data=await accountRequest('list');accountTeams=data.teams||[];state.users=Object.fromEntries(data.users.map(u=>[u.id,{...u,securityOnly:u.role==='employee'&&(u.teamIds||[]).some(id=>accountTeams.some(t=>t.id===id&&t.code==='secu'&&t.actif))}]));accountRoles=data.roles||[];renderAccountFields();}
   function remoteNotice(message){const c=document.getElementById('userAdminConfirm');c.textContent=message;c.style.display='block';}
   function remoteChangeScreen(){pendingPasswordUser=state.currentUser;loginScreen.classList.add('hidden');passwordChangeScreen.classList.remove('hidden');document.body.classList.add('auth-locked');}
   function renderRemoteAccounts(){
@@ -818,25 +838,74 @@ body.keyboard-open .top{position:relative}
     clearTimeout(cloudTimer);cloudTimer=null;if(cloudSaving)return cloudSaving;if(!cloudReady||!isDirection())return;
     cloudSaving=(async()=>{while(accessToken&&JSON.stringify(planPayload())!==cloudHash){const data=JSON.parse(JSON.stringify(planPayload())),sent=JSON.stringify(data);const d=await dataRequest('planning-save',{revision:cloudRevision,data});cloudRevision=d.revision;if(JSON.stringify(planPayload())===sent){cloudApplying=true;for(const f of planFields)state[f]=d.plan[f]??(f==='customSlots'?[]:{});cloudApplying=false;}cloudHash=JSON.stringify(d.plan);}syncMessage('Planning enregistré');})().catch(async e=>{try{await loadCloud(true);}catch{}syncMessage(e.message,true);throw e;}).finally(()=>{cloudSaving=null;});return cloudSaving;
   }
+  function publishFeedback(message,error=false){
+    for(const id of ['v30-message','v30-preview-message','v30-editor-message']){const el=document.getElementById(id);if(el){el.textContent=message;el.style.color=error?'#ffaaaa':'#b1f0c8';}}
+  }
+  let publishing=false;
+  async function publishFromButton(dates,button){
+    if(publishing)return false;publishing=true;const label=button?.textContent;
+    if(button){button.disabled=true;button.textContent='Publication en cours…';}publishFeedback('Publication en cours…');
+    try{return await v30Publish(dates);}catch(e){publishFeedback(e.message,true);return false;}
+    finally{publishing=false;if(button){button.disabled=false;button.textContent=label;}}
+  }
   async function cloudPublish(dates){
-    if(!isDirection()||!cloudReady)return false;dates=dates.filter(v30Touched);if(!dates.length){toast('Aucun service à publier.');return false;}
-    for(const d of dates)for(const [id,p] of employeeEntries()){const shift=v30Draft(id,d);if(shift.status==='present'&&(!shift.slot||!v30Available(id,d).includes(shift.slot))){toast(p.name+' : choisis un créneau disponible.');return false;}}
-    try{dates.forEach(d=>{state.publishedPlans[d]=v30Snapshot(d);state.published[d]=true;});await flushCloudPlan();renderAll();renderCloudModules();document.getElementById('v30-message').textContent='Planning publié et partagé avec les salariés.';toast('Planning publié dans Supabase.');return true;}catch(e){toast(e.message);return false;}
+    if(!isDirection()||!cloudReady){publishFeedback('Connexion ou synchronisation indisponible. Actualise les données avant de publier.',true);return false;}dates=dates.filter(v30Touched);if(!dates.length){publishFeedback('Aucun service à publier sur cette période.',true);toast('Aucun service à publier.');return false;}
+    for(const d of dates)for(const [id,p] of employeeEntries()){const shift=v30Draft(id,d);if(shift.status==='present'&&(!shift.slot||!v30Available(id,d).includes(shift.slot))){const message=p.name+' · '+shortDate(d)+' : choisis un créneau disponible'+(p.securityOnly?' à 22 h':'')+'.';publishFeedback(message,true);toast(message);return false;}}
+    try{dates.forEach(d=>{state.publishedPlans[d]=v30Snapshot(d);state.published[d]=true;});await flushCloudPlan();renderAll();renderCloudModules();publishFeedback('Planning publié et partagé avec les salariés.');toast('Planning publié dans Supabase.');return true;}catch(e){publishFeedback(e.message,true);toast(e.message);return false;}
   }
   function cloudAction(action,params={}){
     const owner=state.currentUser;
     const next=cloudQueue.catch(()=>{}).then(async()=>{if(!cloudReady||state.currentUser!==owner)throw new Error('Reconnecte-toi pour continuer.');await flushCloudPlan();await dataRequest(action,typeof params==='function'?params():params);await loadCloud(true);});
     cloudQueue=next;return next;
   }
-  async function cloudAvailability(d,slot){if(!cloudReady)return;try{await cloudAction('availability',()=>{const old=state.availability[state.currentUser]?.[d]||[];return {day:d,slots:old.includes(slot)?old.filter(x=>x!==slot):[...old,slot]};});toast('Disponibilités enregistrées.');}catch(e){toast(e.message);}}
+  async function cloudAvailability(d,slot){if(!cloudReady||!personSlots(state.currentUser).some(s=>s.id===slot))return;try{await cloudAction('availability',()=>{const old=(state.availability[state.currentUser]?.[d]||[]).filter(s=>personSlots(state.currentUser).some(t=>t.id===s));return {day:d,slots:old.includes(slot)?old.filter(x=>x!==slot):[...old,slot]};});toast('Disponibilités enregistrées.');}catch(e){toast(e.message);}}
+  async function removeShift(k,d,button){
+    if(!isDirection()&&!isSecurityManager())return;if(button)button.disabled=true;
+    try{await cloudAction('shift-delete',()=>({userId:k,day:d,revision:cloudRevision}));toast('Service supprimé. Disponibilités conservées.');if(v30Editing)v30RenderEditor();}
+    catch(e){toast(e.message);await loadCloud(true).catch(()=>{});}finally{if(button)button.disabled=false;}
+  }
+  let securityView='month';
+  function securitySetView(view){if(!isSecurityManager()||!['day','week','month'].includes(view))return;securityView=view;renderSecurity();}
+  function securityNavigate(delta){
+    if(!isSecurityManager())return;const input=document.getElementById('securityDay'),day=input.value||cloudData.today;
+    if(securityView==='month'){const d=v30Date(day);input.value=v30ISO(new Date(d.getFullYear(),d.getMonth()+delta,1,12));}
+    else input.value=v30Add(day,delta*(securityView==='week'?7:1));renderSecurity();
+  }
+  function securityPresentation(k,d){
+    const p=state.publishedPlans[d]?.people[k],available=v30Available(k,d).includes('22');
+    if(p)return {...p,color:p.status,text:v30Labels[p.status]||'Publié',detail:p.slot?v30Range(p):'',stage:'Publié'};
+    const closed=!v30Open(d,'22');return {status:'rest',slot:null,color:closed?'locked':'rest',text:closed?'Fermé':available?'Disponible':'Aucune disponibilité',detail:available?'22h00':'',stage:available?'À valider':''};
+  }
+  function renderSecurityCalendar(day){
+    const root=document.getElementById('securityCalendar'),days=v30Period(day,securityView),oldScroll=root.querySelector('.v30-scroll')?.scrollTop||0;
+    document.querySelectorAll('[data-security-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.securityView===securityView)));
+    document.getElementById('securityPeriod').textContent=securityView==='month'?monthTitle(day.slice(0,7)):securityView==='week'?shortDate(days[0])+' — '+shortDate(days[days.length-1]):fmtDate(day);
+    document.getElementById('securitySelectedDay').textContent='Validation · '+fmtDate(day);
+    if(securityView==='day'){root.innerHTML='';return;}
+    let body='';
+    if(securityView==='week')body=v30Table(days,securityPresentation,day,securityView);
+    else{const last=v30Add(v30Monday(days[days.length-1]),6);for(let a=v30Monday(days[0]);a<=last;a=v30Add(a,7))body+=`<div class="v30-week-label">${shortDate(a)} — ${shortDate(v30Add(a,6))}</div>`+v30Table(v30Days(a,v30Add(a,6)),securityPresentation,day,securityView);}
+    root.innerHTML=employeeEntries().length?`<div class="v30-scroll" tabindex="0" role="region" aria-label="Calendrier des agents Sécu">${body}</div>`:'<div class="empty">Aucun agent Sécu affecté.</div>';
+    const scroll=root.querySelector('.v30-scroll');if(scroll)scroll.scrollTop=oldScroll;
+    root.querySelectorAll('[data-v30-cell]').forEach(b=>{b.setAttribute('aria-current',b.dataset.date===day?'date':'false');b.addEventListener('click',()=>{
+      document.getElementById('securityDay').value=b.dataset.date;renderSecurity();document.getElementById('security-slot-'+b.dataset.person)?.scrollIntoView({behavior:'smooth',block:'center'});
+    });});
+  }
+  document.getElementById('securityToolbar')?.addEventListener('click',e=>{
+    const button=e.target.closest('button');if(!button||!isSecurityManager())return;
+    if(button.dataset.securityView)securitySetView(button.dataset.securityView);
+    if(button.dataset.securityNav)securityNavigate(Number(button.dataset.securityNav));
+    if(button.id==='securityToday'){document.getElementById('securityDay').value=cloudData.today;renderSecurity();}
+  });
   function renderSecurity(){
     const box=document.getElementById('securityAgents');if(!box)return;
     if(!isSecurityManager()||!cloudReady){box.innerHTML='';return;}
-    const date=document.getElementById('securityDay');if(!date.value)date.value=cloudData.today;const day=date.value;
+    const date=document.getElementById('securityDay');if(!date.value)date.value=cloudData.today;const day=date.value;renderSecurityCalendar(day);
     box.innerHTML=employeeEntries().map(([id,p])=>{
       const available=v30Available(id,day),current=state.publishedPlans[day]?.people[id];
-      return `<article class="security-agent"><h3>${v30Esc(p.name)}</h3><p>${current?.status==='present'?'Service publié : '+v30Esc(v30Range(current)):'Aucun service validé pour cette date.'}</p><form data-security-agent="${v30Esc(id)}"><div class="field"><label for="security-slot-${id}">Créneau disponible</label><select id="security-slot-${id}" name="slot" required ${available.length?'':'disabled'}><option value="">${available.length?'Choisir un créneau':'Aucune disponibilité sur un créneau ouvert'}</option>${available.map(slot=>`<option value="${v30Esc(slot)}" ${current?.slot===slot?'selected':''}>${v30Esc(slotDef(slot).label)}</option>`).join('')}</select></div><div class="field"><label for="security-end-${id}">Heure de fin</label><input id="security-end-${id}" name="end" type="time" required value="${v30Esc(current?.end||'04:00')}"/></div><button class="btn" type="submit" ${available.length?'':'disabled'}>Valider et publier</button></form></article>`;
+      return `<article class="security-agent"><h3>${v30Esc(p.name)}</h3><p>${current?.status==='present'?'Service publié : '+v30Esc(v30Range(current)):'Aucun service validé pour cette date.'}</p><form data-security-agent="${v30Esc(id)}"><div class="field"><label for="security-slot-${id}">Créneau disponible</label><select id="security-slot-${id}" name="slot" required ${available.length?'':'disabled'}><option value="">${available.length?'Choisir un créneau':'Aucune disponibilité sur un créneau ouvert'}</option>${available.map(slot=>`<option value="${v30Esc(slot)}" ${current?.slot===slot||available.length===1?'selected':''}>${v30Esc(slotDef(slot).label)}</option>`).join('')}</select></div><div class="field"><label for="security-end-${id}">Heure de fin</label><input id="security-end-${id}" name="end" type="time" required value="${v30Esc(current?.end||'04:00')}"/></div><button class="btn" type="submit" ${available.length?'':'disabled'}>Valider et publier</button></form>${current?.status==='present'?`<button type="button" class="btn red" style="margin-top:14px" data-security-delete="${v30Esc(id)}">Supprimer le service</button>`:''}</article>`;
     }).join('')||'<div class="empty">Aucun agent rattaché à l’équipe Sécu. La direction doit affecter les employés à cette équipe dans Admin.</div>';
+    box.querySelectorAll('[data-security-delete]').forEach(b=>b.addEventListener('click',()=>removeShift(b.dataset.securityDelete,day,b)));
     box.querySelectorAll('[data-security-agent]').forEach(form=>form.addEventListener('submit',async e=>{
       e.preventDefault();const button=form.querySelector('button[type="submit"]');if(button.disabled)return;button.disabled=true;
       const message=document.getElementById('securityMessage');message.textContent='Validation en cours…';
@@ -892,7 +961,7 @@ body.keyboard-open .top{position:relative}
   let pendingPasswordUser=null;
   function setAuthError(el,msg){if(!el)return;el.textContent=msg||'';el.classList.toggle('show',!!msg)}
   function showLogin(msg=''){
-    state.currentUser=null;cloudReady=false;clearTimeout(cloudTimer);cloudTimer=null;pendingPasswordUser=null;const resetDialog=document.getElementById('resetAccountDialog');if(resetDialog?.open)resetDialog.close();document.getElementById('editAccountDialog')?.close();document.getElementById('userAdminConfirm').textContent='';['currentPassword','newPassword1','newPassword2','newUserPassword','newUserPassword2','resetAccountPassword','resetAccountPassword2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});document.body.classList.add('auth-locked');loginScreen?.classList.remove('hidden');passwordChangeScreen?.classList.add('hidden');
+    state.currentUser=null;cloudReady=false;['securityCalendar','securityAgents'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='';});clearTimeout(cloudTimer);cloudTimer=null;pendingPasswordUser=null;const resetDialog=document.getElementById('resetAccountDialog');if(resetDialog?.open)resetDialog.close();document.getElementById('editAccountDialog')?.close();document.getElementById('userAdminConfirm').textContent='';['currentPassword','newPassword1','newPassword2','newUserPassword','newUserPassword2','resetAccountPassword','resetAccountPassword2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});document.body.classList.add('auth-locked');loginScreen?.classList.remove('hidden');passwordChangeScreen?.classList.add('hidden');
     setAuthError(document.getElementById('loginError'),msg);document.getElementById('loginPassword').value='';document.getElementById('page-home').checked=true;applyAccess();renderAll();
     setTimeout(()=>document.getElementById('loginIdentifier')?.focus(),50);
   }
@@ -943,6 +1012,7 @@ body.keyboard-open .top{position:relative}
     return [...new Set(ks.flatMap(regularDays).concat(Object.keys(state.exceptionalDays)))].sort()
   }
   function slots(){return builtInSlots.concat(state.customSlots.map((s,i)=>({...s,color:'slot-custom'+(i%3)})))}
+  function personSlots(k){return slots().filter(s=>!state.users[k]?.securityOnly||s.id==='22')}
   function slotDef(id){return slots().find(s=>s.id===id)||{id,time:id+':00',label:id+'h00',color:'slot-custom0'} }
   function slotLabel(id){return slotDef(id).label}
   function slotColor(id){return slotDef(id).color}
@@ -981,14 +1051,13 @@ body.keyboard-open .top{position:relative}
   function v30Add(d,n){const x=v30Date(d);x.setDate(x.getDate()+n);return v30ISO(x)}
   function v30Monday(d){return v30Add(d,-((v30Date(d).getDay()+6)%7))}
   function v30Days(a,b){const out=[];for(let d=a;d<=b;d=v30Add(d,1))out.push(d);return out}
-  function v30Period(){
-    const d=state.dirDate;
-    if(state.calendarView==='day')return [d];
-    if(state.calendarView==='week'){const a=v30Monday(d);return v30Days(a,v30Add(a,6))}
+  function v30Period(d=state.dirDate,view=state.calendarView){
+    if(view==='day')return [d];
+    if(view==='week'){const a=v30Monday(d);return v30Days(a,v30Add(a,6))}
     const x=v30Date(d),a=v30ISO(new Date(x.getFullYear(),x.getMonth(),1,12)),b=v30ISO(new Date(x.getFullYear(),x.getMonth()+1,0,12));return v30Days(a,b);
   }
   function v30Open(d,slot){const wd=v30Date(d).getDay();return isExceptional(d)||[5,6].includes(wd)||(wd===4&&(slot?isThursdaySlotOpen(d,slot):(state.thursdayUnlocked[d]||[]).length>0))}
-  function v30Available(k,d){return (state.availability[k]?.[d]||[]).filter(id=>v30Open(d,id))}
+  function v30Available(k,d){return (state.availability[k]?.[d]||[]).filter(id=>v30Open(d,id)&&personSlots(k).some(s=>s.id===id))}
   function v30Draft(k,d){const slot=state.validated[d]?.[k],status=state.planStatus[d]?.[k]||(slot?'present':'rest');return {status,slot:status==='present'?slot:null,end:state.shiftEnds[d]?.[k]||'04:00'}}
   function v30Snapshot(d){const people={};employeeEntries().forEach(([k])=>people[k]=v30Draft(k,d));return {people,publishedAt:new Date().toISOString()}}
   function v30Time(t){const [h,m]=t.split(':').map(Number);return h*60+m}
@@ -1058,15 +1127,15 @@ body.keyboard-open .top{position:relative}
   function v30Person(k,d){
     const p=v30Presentation(k,d),av=v30Available(k,d),official=state.publishedPlans[d]?.people[k],name=state.users[k].name;
     return `<article class="v30-person" data-v30-person="${v30Esc(k)}"><h3>${v30Esc(name)}</h3><span class="v30-status v30-${p.color}">${p.text}${p.stage?' · '+p.stage:''}</span>
-      <p class="v30-note">1. Disponibilités déclarées${av.length?'':' · aucune'}</p><div class="availability-chips">${slots().map(sl=>`<button type="button" class="v30-slot" data-v30-slot="${v30Esc(sl.id)}" data-person="${v30Esc(k)}" data-date="${d}" aria-pressed="${p.slot===sl.id}" ${av.includes(sl.id)?'':'disabled'}>${!v30Open(d,sl.id)?'🔒 ':''}${v30Esc(sl.label)}</button>`).join('')}</div>
+      <p class="v30-note">1. Disponibilités déclarées${av.length?'':' · aucune'}</p><div class="availability-chips">${personSlots(k).map(sl=>`<button type="button" class="v30-slot" data-v30-slot="${v30Esc(sl.id)}" data-person="${v30Esc(k)}" data-date="${d}" aria-pressed="${p.slot===sl.id}" ${av.includes(sl.id)?'':'disabled'}>${!v30Open(d,sl.id)?'🔒 ':''}${v30Esc(sl.label)}</button>`).join('')}</div>
       <p class="v30-note">2. Horaire retenu · ${p.slot?v30Esc(v30Range(p))+' · '+formatHours(v30Hours(p)):'aucun créneau'}</p>
       <div class="v30-fields"><div class="field"><label for="status-${v30Esc(k)}-${d}">Statut de la journée</label><select id="status-${v30Esc(k)}-${d}" data-v30-status data-person="${v30Esc(k)}" data-date="${d}">${p.slot?'<option value="present" selected>Présent (créneau retenu)</option>':''}${['rest','leave','absent'].map(s=>`<option value="${s}" ${p.status===s?'selected':''}>${v30Labels[s]}</option>`).join('')}</select></div><div class="field"><label for="end-${v30Esc(k)}-${d}">Fin du service</label><input id="end-${v30Esc(k)}-${d}" type="time" data-v30-end data-person="${v30Esc(k)}" data-date="${d}" value="${p.end}" ${p.slot?'':'disabled'}></div></div>
-      <div class="v30-official">3. Dernière publication<br><strong>${official?v30Labels[official.status]+(official.slot?' · '+v30Esc(v30Range(official)):''):'Aucun planning publié'}</strong>${official&&!v30Same(k,d)?'<br>Modification en brouillon · publication précédente conservée':''}</div></article>`;
+      <div class="v30-official">3. Dernière publication<br><strong>${official?v30Labels[official.status]+(official.slot?' · '+v30Esc(v30Range(official)):''):'Aucun planning publié'}</strong>${official&&!v30Same(k,d)?'<br>Modification en brouillon · publication précédente conservée':''}</div>${p.slot||official?.slot?`<button type="button" class="btn red" style="margin-top:12px" data-v30-delete data-person="${v30Esc(k)}" data-date="${d}">Supprimer le service</button>`:''}</article>`;
   }
-  function v30Table(days){
-    const today=v30ISO(new Date()),month=state.dirDate.slice(0,7);
-    const dateClass=d=>[isExceptional(d)?'v30-event':'',d.slice(0,7)!==month&&state.calendarView==='month'?'v30-out':'',d===today?'v30-today':''].join(' ');
-    return `<table class="v30-table" aria-label="Équipe du ${shortDate(days[0])} au ${shortDate(days[6])}"><colgroup><col>${days.map(()=>'<col>').join('')}</colgroup><thead><tr><th scope="col">Salariés</th>${days.map(d=>`<th scope="col" class="${dateClass(d)}">${v30Esc(dayName(d))}<span class="v30-date">${v30Date(d).getDate()} ${d.slice(0,7)!==month?v30Date(d).toLocaleDateString('fr-FR',{month:'short'}):''}</span>${isExceptional(d)?'<span class="v30-event-label" title="'+v30Esc(eventTitle(d))+'">ÉVÉNEMENT</span>':''}</th>`).join('')}</tr></thead><tbody>${employeeEntries().map(([k,u])=>`<tr><th scope="row">${v30Esc(u.name)}</th>${days.map(d=>{const p=v30Presentation(k,d);return `<td class="${dateClass(d)}"><button type="button" class="v30-cell v30-${p.color}" data-v30-cell data-person="${v30Esc(k)}" data-date="${d}" aria-label="${v30Esc(u.name+', '+fmtDate(d)+', '+p.text+', '+p.detail+', '+p.stage+(isExceptional(d)?', ÉVÉNEMENT '+eventTitle(d):''))}"><strong>${p.text}</strong>${p.detail?'<small>'+v30Esc(p.detail)+'</small>':''}<small>${p.slot?formatHours(v30Hours(p))+' · ':''}${p.stage||'—'}</small></button></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
+  function v30Table(days,presentation=v30Presentation,focusDate=state.dirDate,view=state.calendarView){
+    const today=v30ISO(new Date()),month=focusDate.slice(0,7);
+    const dateClass=d=>[isExceptional(d)?'v30-event':'',d.slice(0,7)!==month&&view==='month'?'v30-out':'',d===today?'v30-today':''].join(' ');
+    return `<table class="v30-table" aria-label="Équipe du ${shortDate(days[0])} au ${shortDate(days[6])}"><colgroup><col>${days.map(()=>'<col>').join('')}</colgroup><thead><tr><th scope="col">Salariés</th>${days.map(d=>`<th scope="col" class="${dateClass(d)}">${v30Esc(dayName(d))}<span class="v30-date">${v30Date(d).getDate()} ${d.slice(0,7)!==month?v30Date(d).toLocaleDateString('fr-FR',{month:'short'}):''}</span>${isExceptional(d)?'<span class="v30-event-label" title="'+v30Esc(eventTitle(d))+'">ÉVÉNEMENT</span>':''}</th>`).join('')}</tr></thead><tbody>${employeeEntries().map(([k,u])=>`<tr><th scope="row">${v30Esc(u.name)}</th>${days.map(d=>{const p=presentation(k,d);return `<td class="${dateClass(d)}"><button type="button" class="v30-cell v30-${p.color}" data-v30-cell data-person="${v30Esc(k)}" data-date="${d}" aria-label="${v30Esc(u.name+', '+fmtDate(d)+', '+p.text+', '+p.detail+', '+p.stage+(isExceptional(d)?', ÉVÉNEMENT '+eventTitle(d):''))}"><strong>${p.text}</strong>${p.detail?'<small>'+v30Esc(p.detail)+'</small>':''}<small>${p.slot?formatHours(v30Hours(p))+' · ':''}${p.stage||'—'}</small></button></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
   }
   function v30Summary(days){
     const counts={present:0,leave:0,absent:0},distinct={present:new Set(),leave:new Set(),absent:new Set()};let hours=0;
@@ -1105,7 +1174,7 @@ body.keyboard-open .top{position:relative}
   function v30RenderEditor(){
     if(!v30Editing||!isDirection())return;const {k,d}=v30Editing;
     document.getElementById('v30-editor-title').textContent=state.users[k].name+' · '+fmtDate(d);
-    document.getElementById('v30-editor-body').innerHTML=(isExceptional(d)?`<p class="event-tag">ÉVÉNEMENT · ${v30Esc(eventTitle(d))}</p>`:'')+v30LockPanel(d)+v30Person(k,d)+`<div class="v30-actions"><button type="button" class="btn" data-v30-publish-day="${d}">Valider et publier cette journée</button></div><p class="v30-note">La publication concerne tous les salariés de cette journée.</p>`;
+    document.getElementById('v30-editor-body').innerHTML=(isExceptional(d)?`<p class="event-tag">ÉVÉNEMENT · ${v30Esc(eventTitle(d))}</p>`:'')+v30LockPanel(d)+v30Person(k,d)+`<div class="v30-actions"><button type="button" class="btn" data-v30-publish-day="${d}">Valider et publier cette journée</button></div><p class="v30-note">La publication concerne tous les salariés de cette journée.</p><p id="v30-editor-message" role="status" aria-live="polite"></p>`;
   }
   function v30Preview(){
     v30PreviewDates=v30Period().filter(v30Touched);
@@ -1119,19 +1188,20 @@ body.keyboard-open .top{position:relative}
     save();renderDirection();document.getElementById('v30-message').textContent='';document.querySelector('.v30-scroll')?.scrollTo(0,0);
   }
   [document.getElementById('planningDesktop'),document.getElementById('v30-editor'),document.getElementById('v30-preview')].forEach(root=>{
-    root.addEventListener('click',e=>{
+    root.addEventListener('click',async e=>{
       const b=e.target.closest('button');if(!b||!isDirection())return;
       if(b.hasAttribute('data-v30-close')){b.closest('dialog').close();return}
       if(b.dataset.v30View){state.calendarView=b.dataset.v30View;save();renderDirection()}
       if(b.dataset.v30Nav)v30Navigate(Number(b.dataset.v30Nav));
       if(b.id==='v30-today'){state.dirDate=v30ISO(new Date());save();renderDirection()}
       if(b.hasAttribute('data-v30-cell')){v30Editing={k:b.dataset.person,d:b.dataset.date};v30RenderEditor();document.getElementById('v30-editor').showModal()}
+      if(b.hasAttribute('data-v30-delete'))removeShift(b.dataset.person,b.dataset.date,b);
       if(b.dataset.v30Slot)v30Choose(b.dataset.person,b.dataset.date,b.dataset.v30Slot);
       if(b.dataset.v30Unlock){setThursdaySlotOpen(b.dataset.date,b.dataset.v30Unlock,!isThursdaySlotOpen(b.dataset.date,b.dataset.v30Unlock));if(v30Editing)v30RenderEditor()}
       if(b.id==='v30-preview-open')v30Preview();
-      if(b.id==='v30-publish')v30Publish(v30Period());
-      if(b.id==='v30-preview-publish'&&v30Publish(v30PreviewDates))document.getElementById('v30-preview').close();
-      if(b.dataset.v30PublishDay&&v30Publish([b.dataset.v30PublishDay]))v30RenderEditor();
+      if(b.id==='v30-publish')await publishFromButton(v30Period(),b);
+      if(b.id==='v30-preview-publish'&&await publishFromButton(v30PreviewDates,b))document.getElementById('v30-preview').close();
+      if(b.dataset.v30PublishDay&&await publishFromButton([b.dataset.v30PublishDay],b)){v30RenderEditor();publishFeedback('Planning publié et partagé avec les salariés.');}
     });
     root.addEventListener('change',e=>{
       const el=e.target;if(!isDirection())return;
@@ -1187,9 +1257,9 @@ body.keyboard-open .top{position:relative}
   document.getElementById('addPlanningItem')?.addEventListener('click',()=>{if(!isDirection())return;const type=document.getElementById('addPlanningType').value,cf=document.getElementById('addPlanningConfirm');if(type==='slot'){const time=document.getElementById('newSlotTime').value,label=document.getElementById('newSlotLabel').value.trim()||'Créneau supplémentaire';if(!time){toast('Choisis une heure.');return}const id='c'+time.replace(':','');if(state.customSlots.some(s=>s.id===id)||builtInSlots.some(s=>s.time===time)){toast('Ce créneau existe déjà.');return}state.customSlots.push({id,time,label:label+' · '+time.replace(':','h')});if(cf){cf.textContent='✓ Créneau '+time+' ajouté et visible pour tous les salariés.';cf.style.display='block'}}else{const date=document.getElementById('newEventDate').value,title=document.getElementById('newEventTitle').value.trim()||'Événement exceptionnel';if(!date){toast('Choisis la date de l’événement.');return}state.exceptionalDays[date]={title};state.published[date]=false;state.dirDate=date;state.month=date.slice(0,7);if(cf){cf.textContent='✓ Journée exceptionnelle ajoutée en rouge dans le planning.';cf.style.display='block'}}save();renderAll();toast(type==='slot'?'Créneau ajouté.':'Journée exceptionnelle ajoutée.')});
 
   // availability / employee planning
-  function renderExceptionalStrip(){const box=document.getElementById('staffExceptionalDays');if(!box)return;const k=state.currentUser,dates=exceptionalInMonth(state.month);box.innerHTML=dates.map(d=>{const chosen=(state.availability[k]?.[d])||[];return `<div class="exceptional-card card"><div class="exceptional-head"><div><span class="event-tag">ÉVÉNEMENT</span> <span class="event-title">${v30Esc(eventTitle(d))}</span><div class="muted small">${fmtDate(d)}</div></div></div><div>${slots().map(sl=>`<button type="button" class="av-slot ${sl.color} ${chosen.includes(sl.id)?'selected':''}" data-av-date="${d}" data-av-slot="${sl.id}">${sl.label}</button>`).join('')}</div></div>`}).join('');wireAvailability(box)}
+  function renderExceptionalStrip(){const box=document.getElementById('staffExceptionalDays');if(!box)return;const k=state.currentUser,dates=exceptionalInMonth(state.month);box.innerHTML=dates.map(d=>{const chosen=(state.availability[k]?.[d])||[];return `<div class="exceptional-card card"><div class="exceptional-head"><div><span class="event-tag">ÉVÉNEMENT</span> <span class="event-title">${v30Esc(eventTitle(d))}</span><div class="muted small">${fmtDate(d)}</div></div></div><div>${personSlots(k).map(sl=>`<button type="button" class="av-slot ${sl.color} ${chosen.includes(sl.id)?'selected':''}" data-av-date="${d}" data-av-slot="${sl.id}">${sl.label}</button>`).join('')}</div></div>`}).join('');wireAvailability(box)}
   function wireAvailability(scope){scope.querySelectorAll('[data-av-date]').forEach(b=>b.addEventListener('click',()=>{const d=b.dataset.avDate,t=b.dataset.avSlot,k=state.currentUser;if(hostedAuth){cloudAvailability(d,t);return;}if(!isThursdaySlotOpen(d,t)){toast('Ce créneau du jeudi est verrouillé par la Direction.');return}state.availability[k]=state.availability[k]||{};let arr=state.availability[k][d]||[];arr=arr.includes(t)?arr.filter(x=>x!==t):[...arr,t];state.availability[k][d]=arr;save();renderAvailability();renderDirection();renderHome();renderMySchedule()}))}
-  function renderAvailability(){const cal=document.getElementById('staffAvailabilityCalendar');if(!cal)return;if(isDirection()){cal.innerHTML='';document.getElementById('staffExceptionalDays').innerHTML='';return}document.getElementById('staffMonthTitle').textContent=monthTitle(state.month);const k=state.currentUser;const selectedTotal=Object.values(state.availability[k]||{}).reduce((n,a)=>n+(Array.isArray(a)?a.length:0),0);const saveBtn=document.getElementById('saveAvailability');if(saveBtn)saveBtn.textContent='Enregistrer mes disponibilités'+(selectedTotal?' · '+selectedTotal+' sélection'+(selectedTotal>1?'s':''):'');cal.innerHTML=monthDays(state.month).map(d=>{const chosen=(state.availability[k]?.[d])||[];const th=isRegularThursday(d);return `<div class="av-day ${th?'thursday-locked':''}"><strong>${shortDate(d)}</strong>${slots().map(sl=>{const open=isThursdaySlotOpen(d,sl.id);return `<button type="button" class="av-slot ${sl.color} ${chosen.includes(sl.id)&&open?'selected':''} ${open?'':'locked'}" data-av-date="${d}" data-av-slot="${sl.id}" ${open?'':'disabled'}>${sl.label}</button>`}).join('')}${th?'<div class="lock-note">Les créneaux du jeudi sont fermés par défaut.</div>':''}</div>`}).join('');wireAvailability(cal);renderExceptionalStrip()}
+  function renderAvailability(){const cal=document.getElementById('staffAvailabilityCalendar');if(!cal)return;if(isDirection()){cal.innerHTML='';document.getElementById('staffExceptionalDays').innerHTML='';return}document.getElementById('staffMonthTitle').textContent=monthTitle(state.month);const k=state.currentUser;const selectedTotal=Object.values(state.availability[k]||{}).reduce((n,a)=>n+(Array.isArray(a)?a.length:0),0);const saveBtn=document.getElementById('saveAvailability');if(saveBtn)saveBtn.textContent='Enregistrer mes disponibilités'+(selectedTotal?' · '+selectedTotal+' sélection'+(selectedTotal>1?'s':''):'');cal.innerHTML=monthDays(state.month).map(d=>{const chosen=(state.availability[k]?.[d])||[];const th=isRegularThursday(d);return `<div class="av-day ${th?'thursday-locked':''}"><strong>${shortDate(d)}</strong>${personSlots(k).map(sl=>{const open=isThursdaySlotOpen(d,sl.id);return `<button type="button" class="av-slot ${sl.color} ${chosen.includes(sl.id)&&open?'selected':''} ${open?'':'locked'}" data-av-date="${d}" data-av-slot="${sl.id}" ${open?'':'disabled'}>${sl.label}</button>`}).join('')}${th?'<div class="lock-note">Les créneaux du jeudi sont fermés par défaut.</div>':''}</div>`}).join('');wireAvailability(cal);renderExceptionalStrip()}
   function renderMySchedule(){
     const box=document.getElementById('myValidatedSchedule');if(!box)return;if(isDirection()){box.innerHTML='';return}
     const k=state.currentUser,rows=Object.entries(state.publishedPlans).filter(([,v])=>v.people[k]&&v.people[k].status!=='rest').sort(([a],[b])=>a.localeCompare(b));
@@ -1202,7 +1272,7 @@ body.keyboard-open .top{position:relative}
   function validateSlot(person,date,slot){v30Choose(person,date,slot)}
   function renderThursdayUnlockPanel(d){const p=document.getElementById('thursdayUnlockPanel');if(!p)return;if(!isRegularThursday(d)){p.style.display='none';p.innerHTML='';return}p.style.display='block';const opened=state.thursdayUnlocked[d]||[];const all=slots();p.innerHTML=`<div class="thursday-lock-head"><div><strong>🔒 Créneaux du jeudi</strong><div class="muted small">Fermés par défaut pour tous les salariés.</div></div><span class="pill ${opened.length?'warn':'danger'}">${opened.length?opened.length+' ouvert'+(opened.length>1?'s':''):'Tout verrouillé'}</span></div><div class="unlock-grid">${all.map(sl=>`<button type="button" class="unlock-slot ${opened.includes(sl.id)?'open':'closed'}" data-thursday-slot="${sl.id}">${opened.includes(sl.id)?'🔓':'🔒'} ${sl.label}</button>`).join('')}</div><button type="button" class="btn ghost wide unlock-all" data-thursday-all="1">${opened.length===all.length?'Tout reverrouiller':'Déverrouiller toute la journée'}</button>`;p.querySelectorAll('[data-thursday-slot]').forEach(b=>b.addEventListener('click',()=>setThursdaySlotOpen(d,b.dataset.thursdaySlot,!isThursdaySlotOpen(d,b.dataset.thursdaySlot))));p.querySelector('[data-thursday-all]')?.addEventListener('click',()=>{const shouldOpen=opened.length!==all.length;all.forEach(sl=>setThursdaySlotOpen(d,sl.id,shouldOpen));});}
   function renderLegacyDirection(){const cards=document.getElementById('employeeCards');if(!cards)return;renderDirDateOptions();const d=state.dirDate,val=state.validated[d]||{};renderThursdayUnlockPanel(d);const banner=document.getElementById('dirEventBanner');if(banner){banner.style.display=isExceptional(d)?'block':'none';banner.innerHTML=isExceptional(d)?`<span class="event-tag">ÉVÉNEMENT</span> <strong>${v30Esc(eventTitle(d))}</strong><div class="small" style="margin-top:4px">${fmtDate(d)} · cette journée apparaît en rouge dans le planning de tous les salariés.</div>`:''}
-    const emps=employeeEntries();cards.innerHTML=emps.map(([k,p])=>{const av=v30Available(k,d);return `<div class="employee-card ${isExceptional(d)?'exceptional-day-dir':''}"><h3>${v30Esc(p.name)}<span class="pill ${av.length?'ok':'danger'}">${av.length?av.length+' dispo':'aucune dispo'}</span></h3><div class="muted small" style="margin-bottom:7px">Créneaux déclarés</div><div class="availability-chips">${slots().map(sl=>{const unlocked=isThursdaySlotOpen(d,sl.id),ok=unlocked&&av.includes(sl.id),selected=val[k]===sl.id;return `<button type="button" class="dir-slot ${sl.color} ${ok?'available':''} ${selected?'validated':''}" data-person="${k}" data-date="${d}" data-slot="${sl.id}" ${ok?'':'disabled'}>${unlocked?sl.label:'🔒 '+sl.label}</button>`}).join('')}</div><div class="label" style="margin-top:8px">${val[k]?`Retenu : <strong style="color:#fff">${v30Esc(v30Range(v30Draft(k,d)))}</strong>`:'Aucun créneau retenu'}</div></div>`}).join('');cards.querySelectorAll('.dir-slot.available').forEach(b=>b.addEventListener('click',()=>validateSlot(b.dataset.person,b.dataset.date,b.dataset.slot)));
+    const emps=employeeEntries();cards.innerHTML=emps.map(([k,p])=>{const av=v30Available(k,d);return `<div class="employee-card ${isExceptional(d)?'exceptional-day-dir':''}"><h3>${v30Esc(p.name)}<span class="pill ${av.length?'ok':'danger'}">${av.length?av.length+' dispo':'aucune dispo'}</span></h3><div class="muted small" style="margin-bottom:7px">Créneaux déclarés</div><div class="availability-chips">${personSlots(k).map(sl=>{const unlocked=isThursdaySlotOpen(d,sl.id),ok=unlocked&&av.includes(sl.id),selected=val[k]===sl.id;return `<button type="button" class="dir-slot ${sl.color} ${ok?'available':''} ${selected?'validated':''}" data-person="${k}" data-date="${d}" data-slot="${sl.id}" ${ok?'':'disabled'}>${unlocked?sl.label:'🔒 '+sl.label}</button>`}).join('')}</div><div class="label" style="margin-top:8px">${val[k]?`Retenu : <strong style="color:#fff">${v30Esc(v30Range(v30Draft(k,d)))}</strong>`:'Aucun créneau retenu'}</div>${val[k]||state.publishedPlans[d]?.people[k]?.slot?`<button type="button" class="btn red" data-legacy-delete="${v30Esc(k)}" style="margin-top:12px">Supprimer le service</button>`:''}</div>`}).join('');cards.querySelectorAll('[data-legacy-delete]').forEach(b=>b.addEventListener('click',()=>removeShift(b.dataset.legacyDelete,d,b)));cards.querySelectorAll('.dir-slot.available').forEach(b=>b.addEventListener('click',()=>validateSlot(b.dataset.person,b.dataset.date,b.dataset.slot)));
     const preview=document.getElementById('planningPreviewRows'),selected=emps.filter(([k])=>val[k]);preview.innerHTML=selected.length?selected.map(([k,p])=>`<div class="today-row"><strong>${v30Esc(p.name)}</strong><span class="role muted small">Équipe retenue</span><span class="today-time">${v30Esc(v30Range(v30Draft(k,d)))}</span></div>`).join(''):'<div class="empty">Aucun salarié validé pour cette journée.</div>';
     const checkpoints=[['17h',17],['20h',20],['22h',22]];document.getElementById('coverageBlocks').innerHTML=checkpoints.map(([label,h])=>{const ps=emps.filter(([k])=>{if(!val[k])return false;const interval=v30Interval(v30Draft(k,d));return interval&&interval[0]<=h*60&&interval[1]>h*60}).map(([,p])=>p.name);return `<div class="coverage-block"><div class="coverage-count">${ps.length}</div><strong>Présents à ${label}</strong><div class="muted small">${v30Esc(ps.join(', '))||'Personne'}</div></div>`}).join('');
     document.getElementById('hoursPreview').innerHTML=emps.map(([k,p])=>`<div class="hours-person"><b>${val[k]?formatHours(v30Hours(v30Draft(k,d))):'0h'}</b><div>${v30Esc(p.name)}</div><div class="muted small">${val[k]?v30Range(v30Draft(k,d)):'non planifié'}</div></div>`).join('');const total=emps.reduce((n,[k])=>n+(val[k]?v30Hours(v30Draft(k,d)):0),0);const hh=document.getElementById('dirHoursDay');if(hh)hh.textContent=formatHours(total);const ac=document.getElementById('dirAvailCount');if(ac)ac.textContent=emps.reduce((n,[k])=>n+(state.availability[k]?.[d]?.length||0),0);const pubBtn=document.getElementById('publishPlanning');if(pubBtn)pubBtn.textContent='Valider et publier'+(selected.length?' · '+selected.length+' salarié'+(selected.length>1?'s':''):'');const badge=document.getElementById('publishBadge');if(badge){badge.textContent=state.published[d]?'Publié':'Brouillon';badge.className='pill '+(state.published[d]?'ok':'warn')}const pc=document.getElementById('publishConfirm');if(pc)pc.style.display=state.published[d]?'block':'none'}
@@ -1224,7 +1294,7 @@ body.keyboard-open .top{position:relative}
   document.getElementById('saveAvailability')?.addEventListener('click',async()=>{try{await cloudQueue;await loadCloud(true);const c=document.getElementById('availabilitySaved');if(c){c.classList.add('show');setTimeout(()=>c.classList.remove('show'),2200)}}catch(e){toast(e.message);}});
   document.getElementById('dirDateSelect')?.addEventListener('change',e=>{state.dirDate=e.target.value;save();renderDirection()});
   function moveDir(delta){const days=allPlanningDays(),i=days.indexOf(state.dirDate);state.dirDate=days[Math.max(0,Math.min(days.length-1,i+delta))]||state.dirDate;save();renderDirection()}document.getElementById('dirPrevDay')?.addEventListener('click',()=>moveDir(-1));document.getElementById('dirNextDay')?.addEventListener('click',()=>moveDir(1));
-  document.getElementById('publishPlanning')?.addEventListener('click',()=>v30Publish([state.dirDate]));
+  document.getElementById('publishPlanning')?.addEventListener('click',e=>publishFromButton([state.dirDate],e.currentTarget));
   document.getElementById('clockButton')?.addEventListener('click',async()=>{if(hostedAuth){const b=document.getElementById('clockButton');b.disabled=true;try{await cloudAction('clock',{kind:state.clocked?'stop':'start'});}catch(e){toast(e.message);}finally{b.disabled=false;}return;}state.clocked=!state.clocked;save();updateClock()});
   document.querySelectorAll('input[name="page"]').forEach(el=>el.addEventListener('change',()=>{if(el.checked)requestAnimationFrame(()=>window.scrollTo({top:0,behavior:'auto'}))}));
 

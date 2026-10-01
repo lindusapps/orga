@@ -18,3 +18,9 @@ Voir README pour le fonctionnement et les commandes de test.
 - Sept scénarios automatisés dans tests/test-session.cjs : rechargement, renouvellement concurrent unique, échéance de deux heures, compte désactivé, déconnexion manuelle, réponse tardive après déconnexion, session expirée au démarrage.
 - Tests d'authentification, de modules, de sécurité et les 25 tests du planning réussis.
 - Les tests de session utilisent des réponses Auth simulées et une horloge contrôlée ; ils ne remplacent pas un test de connexion avec le compte réel de l'utilisateur.
+
+## Sécu 22 h, calendrier et suppression individuelle
+- Tests serveur : rejet des créneaux autres que 22 h pour Sécu, filtres de disponibilités, validation direction et responsable.
+- Tests interface : calendrier Sécu Jour/Semaine/Mois, changements de période, agents filtrés et créneaux 22 h.
+- Test du bouton Direction : fenêtre ouverte pendant la publication et en cas d'échec ; fermeture uniquement après confirmation serveur.
+- Test SQL transactionnel avec rollback : suppression individuelle, conservation des autres agents et disponibilités, refus hors équipe, refus pour employés et révisions périmées.
