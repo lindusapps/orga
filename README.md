@@ -15,7 +15,7 @@ Pour un nouveau projet, le premier compte doit être créé dans le tableau de b
 
 Déployer `supabase/functions/staff-admin/index.ts` avec `verify_jwt=true`. La fonction vérifie également l’utilisateur courant auprès d’Auth, son rôle dans la table privée staff_accounts et la version du mot de passe. La clé service reste dans le runtime Supabase. CORS autorise seulement les domaines de production listés dans le fichier.
 
-Dans Admin, la direction choisit un mot de passe lors de la création ou de la réinitialisation d’un compte. Après une réinitialisation, son titulaire doit le changer. Pour modifier son propre mot de passe, le mot de passe actuel est demandé. Les sessions de l’interface sont en mémoire et nécessitent une reconnexion après rechargement ou expiration.
+Dans Admin, la direction choisit un mot de passe lors de la création ou de la réinitialisation d’un compte. Après une réinitialisation, son titulaire doit le changer. Pour modifier son propre mot de passe, le mot de passe actuel est demandé. La session est conservée dans le stockage temporaire de l’onglet (sessionStorage), sans mot de passe. Le rechargement restaure la connexion après vérification du compte côté serveur. La déconnexion de l’interface intervient deux heures après la connexion initiale ; les actualisations et renouvellements des jetons ne prolongent pas ce délai.
 
 ## Modules partagés
 
@@ -36,7 +36,7 @@ Les données de démonstration et l’authentification locale sont supprimées. 
 
 ## Limites explicites
 
-Les rappels automatiques ne sont pas configurés. L’activité de session est temporaire ; les validations et corrections sont conservées dans leurs modules. Les actualisations se font après chaque écriture et toutes les 20 secondes hors saisie, ou avec le bouton Actualiser. Une reconnexion est nécessaire après rechargement ou expiration de session.
+Les rappels automatiques ne sont pas configurés. L’activité de session est temporaire ; les validations et corrections sont conservées dans leurs modules. Les actualisations se font après chaque écriture et toutes les 20 secondes hors saisie, ou avec le bouton Actualiser. La connexion résiste au rechargement du même onglet et expire après deux heures. La fermeture de l’onglet termine sa persistance.
 
 La protection Supabase contre les mots de passe compromis est désactivée dans les réglages actuels du projet ; voir [le réglage Supabase](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection). L’application impose déjà longueur et complexité aux créations et changements.
 
