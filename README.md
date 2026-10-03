@@ -73,3 +73,7 @@ Tests supplémentaires : `node tests/test-security.cjs`. `tests/security-sql.sql
 Les employés affectés à l’équipe Sécu sont limités au créneau de début **22 h**, y compris en cas de plusieurs équipes ou de journée exceptionnelle. La saisie des disponibilités, la direction et le responsable sécurité appliquent cette règle. Les services déjà publiés ne sont pas déplacés automatiquement ; leurs nouvelles modifications doivent respecter 22 h.
 
 Le responsable sécurité dispose de vues Jour/Semaine/Mois, avec les mêmes tables que la direction et uniquement ses agents. Supprimer le service efface le créneau individuel et sa publication, sans toucher aux disponibilités ni aux autres employés. La direction peut supprimer tous les services ; le responsable Sécu reste limité aux agents actifs de son équipe. La prévisualisation attend la réponse du serveur avant de se fermer après publication.
+
+## Mot de passe oublié
+
+Le bouton de récupération par e-mail et le réglage personnel du profil sont disponibles. L’envoi doit être activé avec un expéditeur vérifié : voir [RECUPERATION_EMAIL.md](RECUPERATION_EMAIL.md).
