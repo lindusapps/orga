@@ -14,7 +14,7 @@ begin
  end if;
  select data,revision into strict v_data,v_revision from public.staff_planning where id=true for update;
  if v_revision<>p_revision then raise exception 'Planning modifié. Actualise avant de supprimer.'; end if;
- v_data:=v_data #- array['validated',v_date,v_person] #- array['shiftEnds',v_date,v_person] #- array['planStatus',v_date,v_person] #- array['publishedPlans',v_date,'people',v_person];
+ v_data:=v_data #- array['manualAssignments',v_date,v_person] #- array['validated',v_date,v_person] #- array['shiftEnds',v_date,v_person] #- array['planStatus',v_date,v_person] #- array['publishedPlans',v_date,'people',v_person];
  update public.staff_planning set data=v_data,revision=v_revision+1,updated_at=now() where id=true;
  return v_revision+1;
 end $$;

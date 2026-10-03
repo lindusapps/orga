@@ -51,6 +51,14 @@ setup('direction');availability=[{user_id:uid,day:'2026-10-02',slots:['20','22']
 assert.equal((await req({action:'planning-save',revision:3,data:{publishedPlans:{'2026-10-02':{people:{[uid]:{status:'present',slot:'20',end:'04:00'}}}}}})).status,400);
 assert.equal((await req({action:'planning-save',revision:3,data:{publishedPlans:{'2026-10-02':{people:{[uid]:{status:'present',slot:'22',end:'04:00'}}}}}})).status,200);
 secu=false;
+setup('direction');const manual={validated:{'2026-10-02':{[other]:'17'}},manualAssignments:{'2026-10-02':{[other]:'17'}},publishedPlans:{'2026-10-02':{people:{[other]:{status:'present',slot:'17',end:'04:00',manual:true,assignedBy:'forged'}}}}};
+r=await req({action:'planning-save',revision:3,data:manual});assert.equal(r.status,200);assert.equal(r.data.plan.publishedPlans['2026-10-02'].people[other].assignedBy,uid);assert.ok(r.data.plan.publishedPlans['2026-10-02'].people[other].assignedAt);assert.ok(!calls.some(c=>c.method!=='GET'&&c.url.includes('/staff_availability')));
+for(const role of ['employee','security_manager']){setup(role);assert.equal((await req({action:'planning-save',revision:3,data:manual})).status,403);}
+setup('direction');const forged=structuredClone(manual);delete forged.manualAssignments;assert.equal((await req({action:'planning-save',revision:3,data:forged})).status,400);
+const closed=JSON.parse(JSON.stringify(manual).replaceAll('2026-10-02','2026-10-04'));assert.equal((await req({action:'planning-save',revision:3,data:closed})).status,400);
+const unknown=JSON.parse(JSON.stringify(manual).replaceAll(other,'33333333-3333-4333-8333-333333333333'));assert.equal((await req({action:'planning-save',revision:3,data:unknown})).status,400);
+secu=true;const guard=JSON.parse(JSON.stringify(manual).replaceAll(other,uid));assert.equal((await req({action:'planning-save',revision:3,data:guard})).status,400);const guard22=JSON.parse(JSON.stringify(guard).replaceAll('17','22'));assert.equal((await req({action:'planning-save',revision:3,data:guard22})).status,200);secu=false;
+console.log('PASS direction manual publication without availability, server attribution, employee/manager denial, closed dates and security 22h');
 console.log('PASS security employees limited to 22h on load, availability, direction draft and publication; other teams unaffected');
 console.log('PASS module authorization, per-user filters, server identities/dates, publication validation and concurrent revision checks');
 // Frontend: two rapid availability clicks must not erase each other.

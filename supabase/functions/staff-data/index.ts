@@ -23,7 +23,7 @@ async function securityAgents(){
  const ids=await securityMemberIds();
  return (await members()).filter((p:any)=>p.role==='employee'&&p.active&&ids.has(p.id)).map((p:any)=>({...p,securityOnly:true}));
 }
-const fields=['customSlots','exceptionalDays','thursdayUnlocked','validated','shiftEnds','planStatus','publishedPlans','published'];
+const fields=['customSlots','exceptionalDays','thursdayUnlocked','validated','shiftEnds','planStatus','manualAssignments','publishedPlans','published'];
 function cleanPlan(input:any){
  if(!input||typeof input!=='object'||JSON.stringify(input).length>500000)throw new Error('Planning invalide ou trop volumineux.');
  const d:any={};for(const f of fields)d[f]=input[f]??(f==='customSlots'?[]:{});
@@ -33,7 +33,7 @@ function cleanPlan(input:any){
  for(const f of fields.filter(f=>f!=='customSlots')){if(!d[f]||Array.isArray(d[f])||typeof d[f]!=='object')throw new Error('Planning invalide.');for(const date of Object.keys(d[f]))day(date);}
  for(const [date,list] of Object.entries(d.thursdayUnlocked))if(!Array.isArray(list)||list.some(x=>!slots.has(x)))throw new Error('Ouverture du jeudi invalide.');
  for(const x of Object.values(d.exceptionalDays) as any[])if(typeof x.title!=='string'||!x.title.trim()||x.title.length>200)throw new Error('Événement invalide.');
- for(const f of ['validated','shiftEnds','planStatus'])for(const map of Object.values(d[f]) as any[]){if(!map||typeof map!=='object'||Array.isArray(map))throw new Error('Planning invalide.');for(const [id,val] of Object.entries(map)){if(!uuid(id))throw new Error('Salarié invalide.');if(f==='validated'&&val!==null&&!slots.has(val as string))throw new Error('Créneau invalide.');if(f==='shiftEnds'&&(typeof val!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(val)))throw new Error('Heure invalide.');if(f==='planStatus'&&!['present','rest','leave','absent'].includes(val as string))throw new Error('Statut invalide.');}}
+ for(const f of ['validated','shiftEnds','planStatus','manualAssignments'])for(const map of Object.values(d[f]) as any[]){if(!map||typeof map!=='object'||Array.isArray(map))throw new Error('Planning invalide.');for(const [id,val] of Object.entries(map)){if(!uuid(id))throw new Error('Salarié invalide.');if((f==='validated'||f==='manualAssignments')&&val!==null&&!slots.has(val as string))throw new Error('Créneau invalide.');if(f==='shiftEnds'&&(typeof val!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(val)))throw new Error('Heure invalide.');if(f==='planStatus'&&!['present','rest','leave','absent'].includes(val as string))throw new Error('Statut invalide.');}}
  return d;
 }
 function allowedSlots(plan:any,date:string){const dow=new Date(date+'T12:00:00Z').getUTCDay();const all=['17','20','22',...(plan.customSlots||[]).map((s:any)=>s.id)];return plan.exceptionalDays?.[date]||[5,6].includes(dow)?all:dow===4?(plan.thursdayUnlocked?.[date]||[]):[];}
@@ -95,11 +95,15 @@ Deno.serve(async(req:Request)=>{
   const active=new Set((await members()).filter((p:any)=>p.role==='employee'&&p.active).map((p:any)=>p.id));
   const securityIds=await securityMemberIds();
   for(const [d,map] of Object.entries(next.validated) as any)for(const [id,slot] of Object.entries(map))if(securityIds.has(id)&&slot&&slot!=='22'&&slot!==plan.validated?.[d]?.[id])throw new Error('Les agents Sécu commencent uniquement à 22 h.');
+  for(const [d,map] of Object.entries(next.manualAssignments) as any)for(const [id,slot] of Object.entries(map)){
+   if(slot===plan.manualAssignments?.[d]?.[id]&&slot===next.validated?.[d]?.[id])continue;
+   if(!active.has(id)||!slot||next.validated?.[d]?.[id]!==slot||!allowedSlots(next,d).includes(slot as string)||(securityIds.has(id)&&slot!=='22'))throw new Error('Saisie manuelle invalide : salarié ou créneau indisponible.');
+  }
   const av=await rows('staff_availability');
   for(const [d,snapshot] of Object.entries(next.publishedPlans) as any){
    if(JSON.stringify(snapshot)===JSON.stringify(plan.publishedPlans?.[d]))continue;
    if(!snapshot?.people||typeof snapshot.people!=='object'||Array.isArray(snapshot.people))throw new Error('Publication invalide.');
-   for(const [id,p] of Object.entries(snapshot.people) as any){if(!active.has(id)||!['present','rest','leave','absent'].includes(p.status))throw new Error('Salarié ou statut invalide.');if(p.status==='present'){if(securityIds.has(id)&&p.slot!=='22'&&JSON.stringify(p)!==JSON.stringify(plan.publishedPlans?.[d]?.people?.[id]))throw new Error('Les agents Sécu commencent uniquement à 22 h.');if(!allowedSlots(next,d).includes(p.slot)||!av.find((a:any)=>a.user_id===id&&a.day===d)?.slots.includes(p.slot))throw new Error('Disponibilité modifiée : recharge le planning avant de publier.');if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.end))throw new Error('Heure de fin invalide.');}}
+   for(const [id,p] of Object.entries(snapshot.people) as any){if(!active.has(id)||!['present','rest','leave','absent'].includes(p.status))throw new Error('Salarié ou statut invalide.');if(p.status==='present'){if(securityIds.has(id)&&p.slot!=='22'&&JSON.stringify(p)!==JSON.stringify(plan.publishedPlans?.[d]?.people?.[id]))throw new Error('Les agents Sécu commencent uniquement à 22 h.');if(p.manual!==undefined&&typeof p.manual!=='boolean')throw new Error('Saisie manuelle invalide.');if(p.manual===true&&next.manualAssignments?.[d]?.[id]!==p.slot)throw new Error('Confirme la saisie manuelle dans le planning.');if(!allowedSlots(next,d).includes(p.slot)||(p.manual!==true&&!av.find((a:any)=>a.user_id===id&&a.day===d)?.slots.includes(p.slot)))throw new Error('Disponibilité modifiée : utilise la saisie manuelle ou recharge le planning.');if(p.manual===true){p.assignedBy=u.id;p.assignedAt=new Date().toISOString();}else{delete p.assignedBy;delete p.assignedAt;}if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.end))throw new Error('Heure de fin invalide.');}}
    snapshot.publishedAt=new Date().toISOString();
   }
   const saved=await api('/rest/v1/staff_planning?id=eq.true&revision=eq.'+planning.revision,'PATCH',{data:next,revision:planning.revision+1,updated_at:new Date().toISOString()});

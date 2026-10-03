@@ -30,8 +30,9 @@ begin
  blocked:=false;begin perform public.staff_shift_delete(manager,bar,'2026-10-02',1);exception when others then blocked:=true;end;if not blocked then raise exception 'Cross-team shift deletion accepted';end if;
  blocked:=false;begin perform public.staff_shift_delete(guard,guard,'2026-10-02',1);exception when others then blocked:=true;end;if not blocked then raise exception 'Employee shift deletion accepted';end if;
  blocked:=false;begin perform public.staff_shift_delete(manager,guard,'2026-10-02',0);exception when others then blocked:=true;end;if not blocked then raise exception 'Stale shift deletion accepted';end if;
+ update public.staff_planning set data=jsonb_set(data,'{manualAssignments}',jsonb_build_object('2026-10-02',jsonb_build_object(guard::text,'22'))) where id=true;
  r:=public.staff_shift_delete(manager,guard,'2026-10-02',1);
- if r<>2 or exists(select 1 from public.staff_planning where data#>array['publishedPlans','2026-10-02','people',guard::text] is not null or data#>array['validated','2026-10-02',guard::text] is not null) then raise exception 'Shift not removed';end if;
+ if r<>2 or exists(select 1 from public.staff_planning where data#>array['publishedPlans','2026-10-02','people',guard::text] is not null or data#>array['validated','2026-10-02',guard::text] is not null or data#>array['manualAssignments','2026-10-02',guard::text] is not null) then raise exception 'Shift not removed';end if;
  if not exists(select 1 from public.staff_availability where user_id=guard and slots ? '22') then raise exception 'Availability removed';end if;
  select data#>array['publishedPlans','2026-10-02','people',bar::text] into after_bar from public.staff_planning where id=true;
  if before_bar is distinct from after_bar then raise exception 'Deletion changed other employee';end if;
