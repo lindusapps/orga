@@ -77,3 +77,9 @@ Le responsable sécurité dispose de vues Jour/Semaine/Mois, avec les mêmes tab
 ## Mot de passe oublié
 
 Le bouton de récupération par e-mail et le réglage personnel du profil sont disponibles. L’envoi doit être activé avec un expéditeur vérifié : voir [RECUPERATION_EMAIL.md](RECUPERATION_EMAIL.md).
+
+## Saisie manuelle par la direction
+
+Dans Planning, ouvrir la case d’un salarié puis utiliser « Saisie manuelle — Direction » pour choisir son début de service, même sans disponibilité déclarée. Renseigner la fin et publier la journée ou la période. Sur mobile, « Saisir / modifier le service » ouvre le même formulaire. Le salarié reçoit le planning publié dans son espace ; ses disponibilités restent inchangées. Les services manuels portent une indication et la publication conserve l’auteur et la date côté serveur.
+
+Cette faculté est réservée à Direction, pas aux employés ni aux responsables sécurité. Les jours et créneaux fermés restent fermés, les agents Sécu commencent à 22 h. La suppression du service retire aussi son marqueur de saisie manuelle. Appliquer la mise à jour de `database/delete-shift.sql` et déployer staff-data avant le HTML.
