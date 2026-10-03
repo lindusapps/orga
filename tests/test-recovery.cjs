@@ -2,10 +2,10 @@ const fs=require('fs'),vm=require('vm'),assert=require('node:assert/strict'),{st
 const source=fs.readFileSync(require('path').join(__dirname,'../supabase/functions/staff-recovery/index.ts'),'utf8');
 const uid='11111111-1111-4111-8111-111111111111',jwt='h.'+Buffer.from(JSON.stringify({app_metadata:{password_version:2}})).toString('base64url')+'.s';
 function backend(config={}){
- let handler,calls=[],tokens=[],mail=[],taken=false;
+ let handler,calls=[],tokens=[],mail=[],smtp=[],taken=false;
  const user={id:uid,email:'u33600000000@login.indussapp.invalid',app_metadata:{password_version:2,staff_role:'employee'}};
  const env={SUPABASE_URL:'https://project.example',SUPABASE_SERVICE_ROLE_KEY:'private-service',STAFF_MAIL_API_KEY:'private-mail',STAFF_MAIL_FROM:'staff@example.com',...config.env};
- vm.runInNewContext(stripTypeScriptTypes(source),{Deno:{env:{get:k=>env[k]},serve:f=>handler=f},crypto,TextEncoder,Uint8Array,Request,Response,atob,AbortSignal,fetch:async(url,opts)=>{
+ vm.runInNewContext(stripTypeScriptTypes(source.replace(/^import nodemailer[^\n]+\n/,'')),{nodemailer:{createTransport:options=>{smtp.push(options);return {sendMail:async message=>{mail.push(message);if(config.mailFail)throw Error('SMTP rejected');return {accepted:['accepted@example.com'],rejected:[]};},close(){smtp.push('closed')}};}},Deno:{env:{get:k=>env[k]},serve:f=>handler=f},crypto,TextEncoder,Uint8Array,Request,Response,atob,AbortSignal,fetch:async(url,opts)=>{
   const body=opts.body&&JSON.parse(opts.body);calls.push({url,body,method:opts.method});
   if(url.includes('api.resend.com')||url.includes('api.brevo.com')){mail.push(body);return Response.json({}, {status:config.mailFail?503:200});}
   if(url.endsWith('/auth/v1/user'))return Response.json(user,{status:config.noAuth?401:200});
@@ -20,7 +20,7 @@ function backend(config={}){
   if(url.includes('rpc/staff_recovery_take')){if(taken||config.rejected)return Response.json({}, {status:400});taken=true;return Response.json(uid);}
   throw Error('Unexpected '+url);
  }});
- return {calls,tokens,mail,async req(body,origin='https://indussapp.vercel.app'){const r=await handler(new Request('https://project.example/functions/v1/staff-recovery',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+jwt},body:JSON.stringify(body)}));return {status:r.status,data:await r.json()};}};
+ return {calls,tokens,mail,smtp,async req(body,origin='https://indussapp.vercel.app'){const r=await handler(new Request('https://project.example/functions/v1/staff-recovery',{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+jwt},body:JSON.stringify(body)}));return {status:r.status,data:await r.json()};}};
 }
 (async()=>{
 let b=backend({env:{STAFF_MAIL_API_KEY:''}});assert.equal((await b.req({action:'status'})).data.enabled,false);assert.equal((await b.req({action:'request',login:'0600000000'})).status,503);assert.equal(b.mail.length,0);
@@ -33,6 +33,10 @@ const response=(await b.req({action:'request',login:'06 00 00 00 00',email:'atta
 b=backend({mailFail:true});assert.equal((await b.req({action:'enrol',email:'me@example.com',currentPassword:'OldPassword123'})).status,400);assert.ok(b.calls.some(c=>c.method==='PATCH'));
 b=backend();const token='a'.repeat(64);assert.equal((await b.req({action:'reset',token,password:'short'})).status,400);assert.equal((await b.req({action:'reset',token,password:'StrongPassword123',userId:'attacker'})).status,200);const update=b.calls.find(c=>c.method==='PUT');assert.ok(update.url.endsWith(uid));assert.equal(update.body.app_metadata.password_version,3);assert.equal(update.body.app_metadata.staff_role,'employee');assert.equal((await b.req({action:'reset',token,password:'StrongPassword123'})).status,400);
 assert.equal((await backend({expired:true}).req({action:'verify',token})).status,400);assert.equal((await backend({rejected:true}).req({action:'verify',token})).status,400);assert.equal((await backend({limited:true}).req({action:'request',login:'0600000000'})).status,429);
+b=backend({env:{STAFF_MAIL_PROVIDER:'gmail',STAFF_MAIL_FROM:'test@gmail.com',STAFF_MAIL_API_KEY:'',STAFF_GMAIL_APP_PASSWORD:'abcd efgh ijkl mnop'}});assert.equal((await b.req({action:'status'})).data.enabled,true);assert.equal((await b.req({action:'enrol',email:'me@example.com',currentPassword:'OldPassword123'})).status,200);assert.equal(b.smtp[0].host,'smtp.gmail.com');assert.equal(b.smtp[0].port,465);assert.equal(b.smtp[0].secure,true);assert.equal(b.smtp[0].tls.rejectUnauthorized,true);assert.equal(b.smtp[0].auth.user,'test@gmail.com');assert.equal(b.smtp[0].auth.pass,'abcdefghijklmnop');assert.equal(b.mail[0].to,'me@example.com');assert.equal(b.smtp.at(-1),'closed');
+b=backend({mailFail:true,env:{STAFF_MAIL_PROVIDER:'gmail',STAFF_MAIL_FROM:'test@gmail.com',STAFF_GMAIL_APP_PASSWORD:'abcdefghijklmnop'}});assert.equal((await b.req({action:'enrol',email:'me@example.com',currentPassword:'OldPassword123'})).status,400);assert.equal(b.smtp.at(-1),'closed');assert.ok(b.calls.some(c=>c.method==='PATCH'));
+for(const env of [{STAFF_GMAIL_APP_PASSWORD:''},{STAFF_MAIL_FROM:'spoof@example.com'}]){b=backend({env:{STAFF_MAIL_PROVIDER:'gmail',STAFF_MAIL_FROM:'test@gmail.com',STAFF_GMAIL_APP_PASSWORD:'abcdefghijklmnop',...env}});assert.equal((await b.req({action:'status'})).data.enabled,false);}
+console.log('PASS Gmail adapter: TLS, server-only credentials, recipient, cleanup, failure invalidation and missing configuration');
 console.log('PASS recovery backend: disabled provider, authentication, ownership, no enumeration, hash-only storage, failures, expiry, replay, strength, throttling');
 const create=require('./harness.cjs');let calls=[];
 let h=create({fetch:async(url,o)=>{calls.push(JSON.parse(o.body));return Response.json({enabled:false});}});await h.ready;await h.q.openRecovery('request');assert.equal(h.elem('recoverySubmit').disabled,true);assert.match(h.elem('recoveryMessage').textContent,/configuré/);

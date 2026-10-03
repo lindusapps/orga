@@ -8,13 +8,27 @@ Le bouton « Mot de passe oublié ? » demande le téléphone. Le serveur envoie
 
 Aucun service d'envoi n'était configuré lors de l'ajout. Le bouton est présent et affiche honnêtement que l'envoi doit être configuré. Ne pas annoncer la récupération autonome comme opérationnelle avant un test réel d'envoi et de réception.
 
+### Avec un compte Gmail personnel
+
+Le fournisseur `gmail` est pris en charge par SMTP TLS sur `smtp.gmail.com:465` (les ports 25/587 sont bloqués par Supabase). Il ne demande pas de domaine personnel. Le propriétaire active la validation en deux étapes et crée lui-même un mot de passe d'application Google pour L'Indus Staff, puis enregistre directement dans **Supabase > Edge Functions > Secrets** :
+
+- `STAFF_MAIL_PROVIDER` : `gmail`.
+- `STAFF_MAIL_FROM` : l'adresse Gmail exacte du compte expéditeur.
+- `STAFF_GMAIL_APP_PASSWORD` : le mot de passe d'application de 16 caractères ; les espaces de présentation sont retirés côté serveur.
+
+Ne pas utiliser le mot de passe principal Google et ne pas transmettre ce secret dans une conversation. La disponibilité des mots de passe d'application dépend des paramètres Google. L'envoi reste désactivé sans les trois valeurs. Une fois configuré, faire un test réel avec le propriétaire ; le déploiement et les tests simulés ne prouvent pas la délivrabilité ni l'acceptation de la connexion par Google. Gmail impose ses propres limites et peut refuser une connexion serveur : en cas de refus, vérifier le compte Google ou passer à un fournisseur transactionnel.
+
+Nodemailer est épinglé à `10.0.14`. TLS et la validation des certificats sont obligatoires, les délais sont bornés et les logs SMTP sont désactivés. Aucun paramètre SMTP ni destinataire libre n'est accepté depuis le navigateur.
+
+### Avec Resend ou Brevo
+
 Configurer un domaine d'expédition chez Resend ou Brevo, puis enregistrer dans **Supabase > projet > Edge Functions > Secrets** :
 
 - `STAFF_MAIL_PROVIDER` : `resend` ou `brevo`.
 - `STAFF_MAIL_API_KEY` : clé privée du prestataire, uniquement dans Secrets.
 - `STAFF_MAIL_FROM` : adresse d'expédition autorisée par le prestataire, sans nom d'affichage (ex. `comptes@votre-domaine.fr`).
 
-Ne jamais enregistrer la clé dans GitHub, le HTML ou le navigateur. Le domaine `indussapp.vercel.app` ne peut pas servir de domaine d'expédition personnel. La fonction utilise une API HTTPS, pas les paramètres SMTP Supabase. Après configuration, vérifier une adresse sur un compte de test, demander un lien, changer le mot de passe et vérifier que les anciennes sessions et le lien utilisé sont refusés.
+Ne jamais enregistrer la clé dans GitHub, le HTML ou le navigateur. Le domaine `indussapp.vercel.app` ne peut pas servir de domaine d'expédition personnel. Pour Resend/Brevo, la fonction utilise une API HTTPS ; Gmail utilise son propre transport SMTP. Aucun des trois modes n’utilise les paramètres SMTP de Supabase Auth. Après configuration, vérifier une adresse sur un compte de test, demander un lien, changer le mot de passe et vérifier que les anciennes sessions et le lien utilisé sont refusés.
 
 ## Déploiement et sécurité
 

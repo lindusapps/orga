@@ -1,3 +1,4 @@
+import nodemailer from "npm:nodemailer@10.0.14";
 // Public request/reset flow. Custom authentication: live JWT + current password for
 // contact enrolment; 256-bit expiring single-use tokens for verification/reset.
 // No account, role or recovery token is disclosed by the public request response.
@@ -6,7 +7,9 @@ const site='https://indussapp.vercel.app';
 const provider=Deno.env.get('STAFF_MAIL_PROVIDER')||'resend';
 const mailKey=Deno.env.get('STAFF_MAIL_API_KEY')||'',mailFrom=Deno.env.get('STAFF_MAIL_FROM')||'';
 const emailOK=(v:unknown)=>typeof v==='string'&&v.length<=254&&/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(v)&&!v.endsWith('.invalid');
-const enabled=!!mailKey&&emailOK(mailFrom)&&['resend','brevo'].includes(provider);
+const gmailPassword=(Deno.env.get('STAFF_GMAIL_APP_PASSWORD')||'').replace(/\s/g,'');
+const gmailReady=provider==='gmail'&&/^[^\s<>@]+@gmail\.com$/.test(mailFrom)&&/^[a-zA-Z0-9]{16}$/.test(gmailPassword);
+const enabled=gmailReady||(!!mailKey&&emailOK(mailFrom)&&['resend','brevo'].includes(provider));
 const strong=(p:unknown)=>typeof p==='string'&&p.length>=10&&p.length<=128&&/[A-Z]/.test(p)&&/[a-z]/.test(p)&&/[0-9]/.test(p);
 const generic={ok:true,message:'Si ce compte dispose d’une adresse vérifiée, un lien de réinitialisation lui sera envoyé. Vérifiez aussi les courriers indésirables.'};
 const digest=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,'0')).join('');
@@ -22,7 +25,20 @@ async function send(email:string,token:string,purpose:string){
  const verify=purpose==='verify_email',link=site+'/#'+(verify?'verify-email':'reset-password')+'='+token;
  const subject=verify?'L’Indus Staff — Vérifiez votre adresse e-mail':'L’Indus Staff — Nouveau mot de passe';
  const text=(verify?'Pour confirmer votre adresse e-mail de récupération, ouvrez ce lien :':'Pour choisir un nouveau mot de passe, ouvrez ce lien :')+'\n\n'+link+'\n\nCe lien est personnel, à usage unique et valable '+(verify?'30':'15')+' minutes. Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.';
- const r=await fetch(provider==='brevo'?'https://api.brevo.com/v3/smtp/email':'https://api.resend.com/emails',{method:'POST',headers:{'Content-Type':'application/json',...(provider==='brevo'?{'api-key':mailKey}:{Authorization:'Bearer '+mailKey})},body:JSON.stringify(provider==='brevo'?{sender:{email:mailFrom,name:'L’Indus Staff'},to:[{email}],subject,textContent:text}:{from:'L’Indus Staff <'+mailFrom+'>',to:[email],subject,text}),signal:AbortSignal.timeout(15000)});
+ if(provider==='gmail'){
+  // Gmail requires implicit TLS on 465; Supabase blocks outgoing 25/587.
+  // Credentials stay in server secrets. Never enable SMTP debug logging.
+  const transport=nodemailer.createTransport({host:'smtp.gmail.com',port:465,secure:true,
+   auth:{user:mailFrom,pass:gmailPassword},tls:{minVersion:'TLSv1.2',rejectUnauthorized:true},
+   connectionTimeout:10000,greetingTimeout:10000,socketTimeout:15000,dnsTimeout:10000,
+   logger:false,debug:false,disableFileAccess:true,disableUrlAccess:true});
+  try{
+   const result=await transport.sendMail({from:{name:'L’Indus Staff',address:mailFrom},to:email,subject,text});
+   if(!result.accepted?.length||result.rejected?.length)throw new Error('Envoi indisponible.');
+  }finally{transport.close();}
+  return;
+ }
+ const r=await fetch(provider==='brevo' ?'https://api.brevo.com/v3/smtp/email':'https://api.resend.com/emails',{method:'POST',headers:{'Content-Type':'application/json',...(provider==='brevo'?{'api-key':mailKey}:{Authorization:'Bearer '+mailKey})},body:JSON.stringify(provider==='brevo'?{sender:{email:mailFrom,name:'L’Indus Staff'},to:[{email}],subject,textContent:text}:{from:'L’Indus Staff <'+mailFrom+'>',to:[email],subject,text}),signal:AbortSignal.timeout(15000)});
  if(!r.ok)throw new Error('Envoi indisponible.');
 }
 async function issue(user:any,email:string,purpose:string){
