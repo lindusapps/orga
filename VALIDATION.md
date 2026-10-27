@@ -33,3 +33,9 @@ Voir README pour le fonctionnement et les commandes de test.
 - Le total mensuel utilise uniquement les services publiés, y compris après minuit ; changer un brouillon ne modifie pas ce total.
 - Aucun bouton ni formulaire de pointage ; les commandes serveur clock et clock-correct sont refusées, même pour Direction. Les données historiques restent intactes.
 - Les tests sont simulés et n’utilisent aucun compte ou planning réel. Le parcours authentifié en production n’a pas été testé avec un compte utilisateur réel lors de cette mise à jour.
+
+## Correction de synchronisation — 27 octobre 2026
+
+Le renvoi JSONB réordonne les propriétés : une comparaison du texte JSON brut pouvait considérer la réponse enregistrée comme un nouveau changement et relancer indéfiniment la sauvegarde. La comparaison du planning est désormais indépendante de cet ordre, avec normalisation des champs attendus. Les réponses de lecture plus anciennes que la révision courante sont ignorées.
+
+`tests/test-planning-sync.cjs` reproduit le défaut avant correction et vérifie une seule écriture après validation, le repli après réponse serveur, les métadonnées ajoutées côté serveur, les modifications pendant une sauvegarde et le refus d'écraser un véritable conflit. Les neuf suites automatisées passent. Une requête en lecture seule a confirmé le réordonnancement JSONB dans le projet Supabase ; aucune donnée métier n'a été modifiée pour ce contrôle.
