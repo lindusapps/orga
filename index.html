@@ -1247,7 +1247,12 @@ body.keyboard-open .top{position:relative}
       state.publishedPlans[d]=attempted;state.published[d]=v30DaySaved(d);
       if(hostedAuth)await flushCloudPlan();else save();
       if(state.currentUser!==owner)return false;
-      shiftExpanded.delete(key);publishFeedback('Service validé et partagé automatiquement.');return true;
+      shiftExpanded.delete(key);
+      if(v30Editing?.k===k&&v30Editing.d===d){
+        v30Editing=null;const editor=document.getElementById('v30-editor');
+        if(editor.open)editor.close();document.getElementById('v30-editor-body').innerHTML='';
+      }
+      publishFeedback('Service validé et partagé automatiquement.');toast('Service enregistré.');return true;
     }catch(e){
       if(state.currentUser===owner){if(state.publishedPlans[d]===attempted){if(previous)state.publishedPlans[d]=previous;else delete state.publishedPlans[d];state.published[d]=previousFlag;} (state.validated[d]??={})[k]=shift.slot;(state.planStatus[d]??={})[k]=shift.status;(state.shiftEnds[d]??={})[k]=shift.end;if(shift.manual)(state.manualAssignments[d]??={})[k]=shift.slot;else if(state.manualAssignments[d])delete state.manualAssignments[d][k];shiftExpanded.add(key);shiftErrors.set(key,e.message||'Enregistrement impossible. Réessayez.');}
       return false;
