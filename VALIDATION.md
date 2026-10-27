@@ -39,3 +39,7 @@ Voir README pour le fonctionnement et les commandes de test.
 Le renvoi JSONB réordonne les propriétés : une comparaison du texte JSON brut pouvait considérer la réponse enregistrée comme un nouveau changement et relancer indéfiniment la sauvegarde. La comparaison du planning est désormais indépendante de cet ordre, avec normalisation des champs attendus. Les réponses de lecture plus anciennes que la révision courante sont ignorées.
 
 `tests/test-planning-sync.cjs` reproduit le défaut avant correction et vérifie une seule écriture après validation, le repli après réponse serveur, les métadonnées ajoutées côté serveur, les modifications pendant une sauvegarde et le refus d'écraser un véritable conflit. Les neuf suites automatisées passent. Une requête en lecture seule a confirmé le réordonnancement JSONB dans le projet Supabase ; aucune donnée métier n'a été modifiée pour ce contrôle.
+
+## Fermeture de la fenêtre de saisie après validation
+
+Le repli de la carte ne fermait pas la fenêtre contenant le formulaire. Après confirmation serveur, la fenêtre du salarié enregistré se ferme désormais et le planning affiche son shift compact. Une sauvegarde en attente ou en erreur laisse la fenêtre ouverte. Le test automatisé reproduit l'ancienne fenêtre restant ouverte, puis vérifie sa fermeture après choix du créneau, changement de fin, saisie manuelle et nouvelle tentative réussie.
