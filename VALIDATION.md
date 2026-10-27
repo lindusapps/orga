@@ -24,3 +24,12 @@ Voir README pour le fonctionnement et les commandes de test.
 - Tests interface : calendrier Sécu Jour/Semaine/Mois, changements de période, agents filtrés et créneaux 22 h.
 - Test du bouton Direction : fenêtre ouverte pendant la publication et en cas d'échec ; fermeture uniquement après confirmation serveur.
 - Test SQL transactionnel avec rollback : suppression individuelle, conservation des autres agents et disponibilités, refus hors équipe, refus pour employés et révisions périmées.
+
+## Validation automatique et suppression du pointage — 27 octobre 2026
+
+- Tests simulés : choix du début et de la fin publiés individuellement, formulaire compact uniquement après confirmation, boutons de modification et de reprise, refus après déconnexion.
+- Échec serveur avec ou sans rechargement possible : dernière publication conservée ; saisie tentée gardée dans le formulaire.
+- Les brouillons et publications des collègues restent distincts ; une disponibilité retirée sur un service inchangé ne bloque pas la publication d’un autre salarié.
+- Le total mensuel utilise uniquement les services publiés, y compris après minuit ; changer un brouillon ne modifie pas ce total.
+- Aucun bouton ni formulaire de pointage ; les commandes serveur clock et clock-correct sont refusées, même pour Direction. Les données historiques restent intactes.
+- Les tests sont simulés et n’utilisent aucun compte ou planning réel. Le parcours authentifié en production n’a pas été testé avec un compte utilisateur réel lors de cette mise à jour.
