@@ -856,6 +856,11 @@ body.keyboard-open .top{position:relative}
   let cloudData={debriefs:[],feedback:[],clock:[],incidents:[],today:''};
   function syncMessage(text,error=false){const e=document.getElementById('cloudStatus');if(e){e.textContent=text;e.style.color=error?'#ffaaaa':'';}}
   function planPayload(){return Object.fromEntries(planFields.map(f=>[f,state[f]??(f==='customSlots'?[]:{})]));}
+  // JSONB does not preserve object key order. Compare values, not response serialization.
+  function planSignature(plan=planPayload()){
+    const normalized=Object.fromEntries(planFields.map(f=>[f,plan[f]??(f==='customSlots'?[]:{})]));
+    return JSON.stringify(normalized,(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.keys(value).sort().map(k=>[k,value[k]])):value);
+  }
   async function dataRequest(action,params={}){
     const r=await sessionFetch('/api/functions/staff-data',{method:'POST',headers:{apikey:publicKey,Authorization:'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({action,...params})});const d=await r.json();
     if(!r.ok){if(r.status===401||(r.status===403&&action==='load')){cloudReady=false;clearSession();showLogin(r.status===403?'Ce compte ne dispose plus d’un accès actif.':'Session expirée. Reconnecte-toi.');}throw new Error(d.error||'Service indisponible.');}return d;
@@ -863,20 +868,20 @@ body.keyboard-open .top{position:relative}
   async function loadCloud(force=false){
     if(!accessToken||cloudLoading||(!force&&(cloudSaving||cloudTimer)))return;
     cloudLoading=true;
-    try{const before=JSON.stringify(planPayload());const d=await dataRequest('load');if(cloudReady&&isDirection()&&JSON.stringify(planPayload())!==before)return;cloudApplying=true;cloudData=d;
+    try{const before=planSignature();const d=await dataRequest('load');if(cloudReady&&(d.revision<cloudRevision||(isDirection()&&planSignature()!==before)))return;cloudApplying=true;cloudData=d;
       for(const f of planFields)state[f]=d.plan[f]??(f==='customSlots'?[]:{});
       state.availability={};for(const a of d.availability)(state.availability[a.user_id]??={})[a.day]=a.slots;
       const known=state.users;state.users=Object.fromEntries(d.people.map(p=>[p.id,{...known[p.id],...p}]));
       state.checked={};state.actors={};for(const t of d.tasks){state.checked[t.task_id]=t.done;if(t.actor_id)state.actors[t.task_id]={name:state.users[t.actor_id]?.name||'Équipier',time:new Date(t.updated_at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})};}
       taskIds.forEach(id=>document.getElementById(id).checked=!!state.checked[id]);
-      cloudRevision=d.revision;cloudHash=JSON.stringify(planPayload());cloudReady=true;
+      cloudRevision=d.revision;cloudHash=planSignature();cloudReady=true;
       renderAll();renderCloudModules();syncMessage('Données synchronisées');
     }finally{cloudApplying=false;cloudLoading=false;}
   }
-  function scheduleCloudPlan(){if(!hostedAuth||!cloudReady||cloudApplying||!isDirection()||JSON.stringify(planPayload())===cloudHash)return;clearTimeout(cloudTimer);syncMessage('Enregistrement du planning…');cloudTimer=setTimeout(()=>{cloudTimer=null;flushCloudPlan().catch(e=>syncMessage(e.message,true));},300);}
+  function scheduleCloudPlan(){if(!hostedAuth||!cloudReady||cloudApplying||!isDirection()||planSignature()===cloudHash)return;clearTimeout(cloudTimer);syncMessage('Enregistrement du planning…');cloudTimer=setTimeout(()=>{cloudTimer=null;flushCloudPlan().catch(e=>syncMessage(e.message,true));},300);}
   async function flushCloudPlan(){
     clearTimeout(cloudTimer);cloudTimer=null;if(cloudSaving)return cloudSaving;if(!cloudReady||!isDirection())return;
-    cloudSaving=(async()=>{while(accessToken&&JSON.stringify(planPayload())!==cloudHash){const data=JSON.parse(JSON.stringify(planPayload())),sent=JSON.stringify(data);const d=await dataRequest('planning-save',{revision:cloudRevision,data});cloudRevision=d.revision;if(JSON.stringify(planPayload())===sent){cloudApplying=true;for(const f of planFields)state[f]=d.plan[f]??(f==='customSlots'?[]:{});cloudApplying=false;}cloudHash=JSON.stringify(d.plan);}syncMessage('Planning enregistré');})().catch(async e=>{try{await loadCloud(true);}catch{}syncMessage(e.message,true);throw e;}).finally(()=>{cloudSaving=null;});return cloudSaving;
+    cloudSaving=(async()=>{while(accessToken&&planSignature()!==cloudHash){const data=JSON.parse(JSON.stringify(planPayload())),sent=planSignature(data);const d=await dataRequest('planning-save',{revision:cloudRevision,data});cloudRevision=d.revision;if(planSignature()===sent){cloudApplying=true;for(const f of planFields)state[f]=d.plan[f]??(f==='customSlots'?[]:{});cloudApplying=false;}cloudHash=planSignature(d.plan);}syncMessage('Planning enregistré');})().catch(async e=>{try{await loadCloud(true);}catch{}syncMessage(e.message,true);throw e;}).finally(()=>{cloudSaving=null;});return cloudSaving;
   }
   function publishFeedback(message,error=false){
     for(const id of ['v30-message','v30-preview-message','v30-editor-message']){const el=document.getElementById(id);if(el){el.textContent=message;el.style.color=error?'#ffaaaa':'#b1f0c8';}}
