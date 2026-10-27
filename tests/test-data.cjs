@@ -27,20 +27,21 @@ setup();actor=null;assert.equal((await req({action:'load'})).status,401);
 setup('employee',{staff_active:false});assert.equal((await req({action:'load'})).status,403);
 setup('employee',{must_change_password:true});assert.equal((await req({action:'load'})).status,403);
 setup('employee',{password_version:2});assert.equal((await req({action:'load'},1)).status,401);
-setup();let r=await req({action:'load'});assert.equal(r.status,200);assert.equal(r.data.plan.validated,undefined);assert.deepEqual(Object.keys(r.data.plan.publishedPlans['2026-10-02'].people),[uid]);assert.equal(r.data.tasks[0].actor_id,undefined);assert.equal(r.data.people.length,1);for(const t of ['availability','debriefs','clock','incidents'])assert.ok(calls.find(x=>x.url.includes('/staff_'+t+'?')).url.includes('user_id=eq.'+uid));
+setup();let r=await req({action:'load'});assert.equal(r.status,200);assert.deepEqual(r.data.clock,[]);assert.ok(!calls.some(c=>c.url.includes('/staff_clock')));assert.equal(r.data.plan.validated,undefined);assert.deepEqual(Object.keys(r.data.plan.publishedPlans['2026-10-02'].people),[uid]);assert.equal(r.data.tasks[0].actor_id,undefined);assert.equal(r.data.people.length,1);for(const t of ['availability','debriefs','incidents'])assert.ok(calls.find(x=>x.url.includes('/staff_'+t+'?')).url.includes('user_id=eq.'+uid));
 for(const action of ['planning-save','tasks-reset','feedback','clock-correct','shift-delete']){setup();assert.equal((await req({action,role:'direction',userId:other})).status,403);assert.ok(!calls.some(x=>x.method!=='GET'));}
 setup();assert.equal((await req({action:'availability',day:'2026-10-02',slots:['20'],userId:other})).status,200);assert.equal(calls.at(-1).body.user_id,uid);
 setup();assert.equal((await req({action:'availability',day:'2026-10-04',slots:['20']})).status,400);assert.ok(!calls.some(x=>x.method==='POST'));
 setup();assert.equal((await req({action:'task',taskId:'t-o2',done:true,day:'1999-01-01',actor_id:other})).status,200);assert.equal(calls.at(-1).body.actor_id,uid);assert.notEqual(calls.at(-1).body.day,'1999-01-01');
 setup();assert.equal((await req({action:'task',taskId:'unknown',done:true})).status,400);
-setup();assert.equal((await req({action:'clock',kind:'start',userId:other})).status,200);assert.deepEqual(calls.at(-1).body,{p_user_id:uid,p_action:'start'});
+setup();assert.equal((await req({action:'clock',kind:'start',userId:other})).status,403);assert.ok(!calls.some(c=>c.method==='POST'));setup('direction');assert.equal((await req({action:'clock-correct'})).status,403);
 setup();assert.equal((await req({action:'debrief',day:'2026-10-03',data:{}})).status,403);
 setup();assert.equal((await req({action:'debrief',day:'2026-10-02',userId:other,data:{ambiance:'Bonne',incidents:'',materiel:'',commentaire:'Test'}})).status,200);assert.equal(calls.at(-1).body.user_id,uid);
 setup('direction');assert.equal((await req({action:'planning-save',revision:2,data:{}})).status,409);
 setup('direction');conflict=true;assert.equal((await req({action:'planning-save',revision:3,data:{}})).status,409);
 setup('direction');r=await req({action:'planning-save',revision:3,data:{validated:{'2026-10-02':{[uid]:'20'}}}});assert.equal(r.status,200);assert.equal(r.data.revision,4);assert.ok(calls.at(-1).url.includes('revision=eq.3'));
-setup('direction');const publication={publishedPlans:{'2026-10-02':{people:{[uid]:{status:'present',slot:'20',end:'03:00'}}}}};assert.equal((await req({action:'planning-save',revision:3,data:publication})).status,400);
+setup('direction');const publication={publishedPlans:{'2026-10-02':{people:{[uid]:{status:'present',slot:'20',end:'03:30'}}}}};assert.equal((await req({action:'planning-save',revision:3,data:publication})).status,400);
 availability=[{user_id:uid,day:'2026-10-02',slots:['20']}];r=await req({action:'planning-save',revision:3,data:publication});assert.equal(r.status,200);assert.ok(r.data.plan.publishedPlans['2026-10-02'].publishedAt);
+setup('direction');const individual=structuredClone(plan);individual.publishedPlans['2026-10-02'].people[other]={status:'present',slot:'22',end:'04:00'};availability=[{user_id:other,day:'2026-10-02',slots:['22']}];r=await req({action:'planning-save',revision:3,data:individual});assert.equal(r.status,200);assert.deepEqual(r.data.plan.publishedPlans['2026-10-02'].people[uid],plan.publishedPlans['2026-10-02'].people[uid]);
 secu=true;setup();availability=[{user_id:uid,day:'2026-10-02',slots:['17','20','22']}];
 r=await req({action:'load'});assert.equal(r.data.people[0].securityOnly,true);assert.deepEqual(r.data.availability[0].slots,['22']);
 for(const slot of ['17','20','c2300']){setup();assert.equal((await req({action:'availability',day:'2026-10-02',slots:[slot]})).status,400);}

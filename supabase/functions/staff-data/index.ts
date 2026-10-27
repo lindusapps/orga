@@ -83,7 +83,7 @@ Deno.serve(async(req:Request)=>{
  if(b.action==='security-validate')return reply({error:'Utilise ton espace de planning autorisé.'},403);
  if(b.action==='load'){
   const own='user_id=eq.'+u.id;
-  const [availability,tasks,debriefs,feedback,clock,incidents,people]=await Promise.all([rows('staff_availability',admin?'':own),rows('staff_tasks','day=eq.'+today()),rows('staff_debriefs',admin?'':own),rows('staff_feedback'),rows('staff_clock',admin?'':own),rows('staff_incidents',admin?'':own),admin?members():Promise.resolve([{id:u.id,name:m.staff_name||'Équipier',role:m.staff_role,active:true}])]);
+  const [availability,tasks,debriefs,feedback,clock,incidents,people]=await Promise.all([rows('staff_availability',admin?'':own),rows('staff_tasks','day=eq.'+today()),rows('staff_debriefs',admin?'':own),rows('staff_feedback'),Promise.resolve([]),rows('staff_incidents',admin?'':own),admin?members():Promise.resolve([{id:u.id,name:m.staff_name||'Équipier',role:m.staff_role,active:true}])]);
   const visible=admin?plan:{customSlots:plan.customSlots||[],exceptionalDays:plan.exceptionalDays||{},thursdayUnlocked:plan.thursdayUnlocked||{},publishedPlans:Object.fromEntries(Object.entries(plan.publishedPlans||{}).filter(([,v]:any)=>v.people?.[u.id]).map(([d,v]:any)=>[d,{publishedAt:v.publishedAt,people:{[u.id]:v.people[u.id]}}]))};
   const securityIds=await securityMemberIds();
   return reply({plan:visible,revision:planning.revision,availability:availability.map((a:any)=>securityIds.has(a.user_id)?{...a,slots:a.slots.filter((s:string)=>s==='22')}:a),tasks:admin?tasks:tasks.map(({day,task_id,done}:any)=>({day,task_id,done})),debriefs,feedback,clock,incidents,people:people.map((p:any)=>({...p,securityOnly:p.role==='employee'&&securityIds.has(p.id)})),today:today()});
@@ -103,7 +103,7 @@ Deno.serve(async(req:Request)=>{
   for(const [d,snapshot] of Object.entries(next.publishedPlans) as any){
    if(JSON.stringify(snapshot)===JSON.stringify(plan.publishedPlans?.[d]))continue;
    if(!snapshot?.people||typeof snapshot.people!=='object'||Array.isArray(snapshot.people))throw new Error('Publication invalide.');
-   for(const [id,p] of Object.entries(snapshot.people) as any){if(!active.has(id)||!['present','rest','leave','absent'].includes(p.status))throw new Error('Salarié ou statut invalide.');if(p.status==='present'){if(securityIds.has(id)&&p.slot!=='22'&&JSON.stringify(p)!==JSON.stringify(plan.publishedPlans?.[d]?.people?.[id]))throw new Error('Les agents Sécu commencent uniquement à 22 h.');if(p.manual!==undefined&&typeof p.manual!=='boolean')throw new Error('Saisie manuelle invalide.');if(p.manual===true&&next.manualAssignments?.[d]?.[id]!==p.slot)throw new Error('Confirme la saisie manuelle dans le planning.');if(!allowedSlots(next,d).includes(p.slot)||(p.manual!==true&&!av.find((a:any)=>a.user_id===id&&a.day===d)?.slots.includes(p.slot)))throw new Error('Disponibilité modifiée : utilise la saisie manuelle ou recharge le planning.');if(p.manual===true){p.assignedBy=u.id;p.assignedAt=new Date().toISOString();}else{delete p.assignedBy;delete p.assignedAt;}if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.end))throw new Error('Heure de fin invalide.');}}
+   for(const [id,p] of Object.entries(snapshot.people) as any){if(JSON.stringify(p)===JSON.stringify(plan.publishedPlans?.[d]?.people?.[id]))continue;if(!active.has(id)||!['present','rest','leave','absent'].includes(p.status))throw new Error('Salarié ou statut invalide.');if(p.status==='present'){if(securityIds.has(id)&&p.slot!=='22'&&JSON.stringify(p)!==JSON.stringify(plan.publishedPlans?.[d]?.people?.[id]))throw new Error('Les agents Sécu commencent uniquement à 22 h.');if(p.manual!==undefined&&typeof p.manual!=='boolean')throw new Error('Saisie manuelle invalide.');if(p.manual===true&&next.manualAssignments?.[d]?.[id]!==p.slot)throw new Error('Confirme la saisie manuelle dans le planning.');if(!allowedSlots(next,d).includes(p.slot)||(p.manual!==true&&!av.find((a:any)=>a.user_id===id&&a.day===d)?.slots.includes(p.slot)))throw new Error('Disponibilité modifiée : utilise la saisie manuelle ou recharge le planning.');if(p.manual===true){p.assignedBy=u.id;p.assignedAt=new Date().toISOString();}else{delete p.assignedBy;delete p.assignedAt;}if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.end))throw new Error('Heure de fin invalide.');}}
    snapshot.publishedAt=new Date().toISOString();
   }
   const saved=await api('/rest/v1/staff_planning?id=eq.true&revision=eq.'+planning.revision,'PATCH',{data:next,revision:planning.revision+1,updated_at:new Date().toISOString()});
@@ -133,16 +133,7 @@ Deno.serve(async(req:Request)=>{
   if(!admin)return reply({error:'Réservé à la direction.'},403);
   await upsert('staff_feedback',{day:day(b.day),data:textFields(b.data,['positifs','corrections','consignes','message']),author_id:u.id,published_at:new Date().toISOString()});return reply({ok:true});
  }
- if(b.action==='clock'){
-  if(!['start','stop'].includes(b.kind))throw new Error('Pointage invalide.');
-  await api('/rest/v1/rpc/staff_clock_action','POST',{p_user_id:u.id,p_action:b.kind});return reply({ok:true});
- }
- if(b.action==='clock-correct'){
-  if(!admin)return reply({error:'Réservé à la direction.'},403);
-  if(!uuid(b.id)||typeof b.reason!=='string'||b.reason.trim().length<3||b.reason.length>1000)throw new Error('Identifiant ou motif invalide.');
-  const start=new Date(b.start),end=new Date(b.end);if(!Number.isFinite(+start)||!Number.isFinite(+end)||end<=start||end>new Date())throw new Error('Horaires invalides.');
-  const saved=await api('/rest/v1/staff_clock?id=eq.'+b.id,'PATCH',{started_at:start.toISOString(),ended_at:end.toISOString(),corrected_by:u.id,correction_reason:b.reason.trim()});if(!saved.length)throw new Error('Pointage introuvable.');return reply({ok:true});
- }
+ if(b.action==='clock'||b.action==='clock-correct')return reply({error:'Le pointage est désactivé. Les heures sont calculées à partir du planning validé.'},403);
  if(b.action==='incident'){
   if(!['Matériel','Client','Stock','Sécurité','Autre'].includes(b.category)||typeof b.description!=='string'||!b.description.trim()||b.description.length>5000)throw new Error('Signalement invalide.');
   await upsert('staff_incidents',{user_id:u.id,category:b.category,description:b.description.trim()});return reply({ok:true});

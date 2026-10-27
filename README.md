@@ -21,11 +21,11 @@ Dans Admin, la direction choisit un mot de passe lors de la création ou de la r
 
 Appliquer une fois `database/modules.sql`, puis déployer `supabase/functions/staff-data/index.ts` avec `verify_jwt=true`. Les migrations sont déjà appliquées au projet de production et les deux fonctions sont déployées.
 
-- Planning : brouillon et publication distincts, révision contrôlée pour détecter les modifications concurrentes. Les salariés ne reçoivent que leur planning publié.
+- Planning : chaque choix de la direction valide et publie le service individuel automatiquement. Les anciennes publications des collègues sont conservées ; les révisions détectent les modifications concurrentes. Les salariés ne reçoivent que leur planning publié.
 - Disponibilités : saisie par le titulaire, visible par la direction ; écritures successives mises en file pour conserver les sélections rapides.
 - Tâches : checklist partagée par journée (Europe/Paris), auteur visible uniquement par la direction.
 - Débriefs : service publié du salarié et retour collectif de la direction.
-- Pointages : début/fin enregistrés à l’heure du serveur, démarrage et arrêt idempotents ; correction par la direction avec motif.
+- Heures : total mensuel calculé à partir des services publiés, avec passage après minuit. Le pointage et les corrections de pointage sont désactivés pour tous les rôles ; les données historiques restent conservées en base privée. Ces totaux correspondent au planning, pas à une présence réellement mesurée.
 - Signalements : enregistrement personnel et consultation par la direction.
 
 Les tables métier des modules sont fermées aux rôles navigateur `anon` et `authenticated`. Seule la fonction serveur accède à ces tables après validation de l’utilisateur auprès d’Auth, du rôle actif et de la version du mot de passe. RLS reste activé sans politique publique : l’avis informatif « RLS Enabled No Policy » correspond ici au refus volontaire de l’accès direct. Voir [le contrôle Supabase](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
@@ -80,6 +80,16 @@ Le bouton de récupération par e-mail et le réglage personnel du profil sont d
 
 ## Saisie manuelle par la direction
 
-Dans Planning, ouvrir la case d’un salarié puis utiliser « Saisie manuelle — Direction » pour choisir son début de service, même sans disponibilité déclarée. Renseigner la fin et publier la journée ou la période. Sur mobile, « Saisir / modifier le service » ouvre le même formulaire. Le salarié reçoit le planning publié dans son espace ; ses disponibilités restent inchangées. Les services manuels portent une indication et la publication conserve l’auteur et la date côté serveur.
+Dans Planning, ouvrir la case d’un salarié puis utiliser « Saisie manuelle — Direction » pour choisir son début de service, même sans disponibilité déclarée. Le choix du début publie automatiquement le service avec une fin par défaut à 04 h. « Modifier le service » permet de changer la fin ; la nouvelle valeur est publiée automatiquement. Sur mobile, « Saisir / modifier le service » ouvre le même formulaire. Le salarié reçoit le planning publié dans son espace ; ses disponibilités restent inchangées. Les services manuels portent une indication et la publication conserve l’auteur et la date côté serveur.
 
 Cette faculté est réservée à Direction, pas aux employés ni aux responsables sécurité. Les jours et créneaux fermés restent fermés, les agents Sécu commencent à 22 h. La suppression du service retire aussi son marqueur de saisie manuelle. Appliquer la mise à jour de `database/delete-shift.sql` et déployer staff-data avant le HTML.
+
+## Validation automatique et affichage compact
+
+Choisir un début, modifier une fin ou changer un statut publie uniquement le service du salarié concerné. Après confirmation du serveur, les choix horaires se referment : la carte affiche le shift retenu, ses heures et les boutons Modifier / Supprimer. Pendant l’écriture, les commandes sont désactivées. En cas d’échec, le formulaire reste ouvert et propose Réessayer, sans remplacer la dernière publication confirmée. Les brouillons des autres salariés ne sont pas publiés automatiquement ; le bouton Publier les brouillons restants reste disponible pour les anciens brouillons.
+
+Le responsable sécurité bénéficie du même affichage compact et de la publication au choix des horaires, uniquement pour ses agents disponibles à 22 h. La direction conserve sa saisie manuelle. Les contraintes d’ouverture et les droits existants restent appliqués côté serveur.
+
+L’écran Heures additionne automatiquement les services publiés du mois sélectionné. Il ne dépend ni d’un bouton d’arrivée/départ ni des brouillons. Les fonctions serveur refusent les anciennes commandes de pointage. Aucun enregistrement historique n’est supprimé.
+
+Vérification complémentaire : `node tests/test-auto-planning.cjs` (publication individuelle, attente serveur, échec et reprise, mode hors connexion, carte compacte, conservation des collègues et calcul des heures).
