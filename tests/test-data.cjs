@@ -59,6 +59,11 @@ setup('direction');const forged=structuredClone(manual);delete forged.manualAssi
 const closed=JSON.parse(JSON.stringify(manual).replaceAll('2026-10-02','2026-10-04'));assert.equal((await req({action:'planning-save',revision:3,data:closed})).status,400);
 const unknown=JSON.parse(JSON.stringify(manual).replaceAll(other,'33333333-3333-4333-8333-333333333333'));assert.equal((await req({action:'planning-save',revision:3,data:unknown})).status,400);
 secu=true;const guard=JSON.parse(JSON.stringify(manual).replaceAll(other,uid));assert.equal((await req({action:'planning-save',revision:3,data:guard})).status,400);const guard22=JSON.parse(JSON.stringify(guard).replaceAll('17','22'));assert.equal((await req({action:'planning-save',revision:3,data:guard22})).status,200);secu=false;
+setup('direction');const blank={publishedPlans:{'2026-11-06':{people:{[uid]:{status:'rest',slot:null,end:'04:00'}}}},published:{'2026-11-06':true}};
+r=await req({action:'planning-save',revision:3,data:blank});assert.equal(r.status,200);assert.equal(r.data.plan.publishedPlans['2026-11-06'],undefined);assert.equal(r.data.plan.published['2026-11-06'],undefined);
+const explicit=structuredClone(blank);explicit.planStatus={'2026-11-06':{[uid]:'rest',[other]:'leave'}};explicit.publishedPlans['2026-11-06'].people[other]={status:'leave',slot:null,end:'04:00'};
+r=await req({action:'planning-save',revision:3,data:explicit});assert.equal(r.status,200);assert.equal(r.data.plan.publishedPlans['2026-11-06'].people[uid].status,'rest');assert.equal(r.data.plan.publishedPlans['2026-11-06'].people[other].status,'leave');
+console.log('PASS server excludes implicit rest publications while preserving explicit rest and leave');
 console.log('PASS direction manual publication without availability, server attribution, employee/manager denial, closed dates and security 22h');
 console.log('PASS security employees limited to 22h on load, availability, direction draft and publication; other teams unaffected');
 console.log('PASS module authorization, per-user filters, server identities/dates, publication validation and concurrent revision checks');
@@ -66,7 +71,7 @@ console.log('PASS module authorization, per-user filters, server identities/date
 let saved=[];const h=require('./harness.cjs')({fetch:async(url,o)=>{const b=JSON.parse(o.body||'{}');if(url.includes('/token?'))return Response.json({access_token:'session'});if(b.action==='me')return Response.json({user:{id:uid,name:'A',role:'employee',active:true}});if(b.action==='availability'){saved=b.slots;return Response.json({ok:true});}if(b.action==='load')return Response.json({plan:{},revision:0,availability:[{user_id:uid,day:'2026-10-02',slots:saved}],tasks:[],debriefs:[],feedback:[],clock:[],incidents:[],people:[{id:uid,name:'A',role:'employee',active:true}],today:'2026-10-02'});throw new Error('Unexpected '+url);}});
 await h.q.remoteLogin('0600000000','Example1234');await Promise.all(['20','22'].map(slot=>h.q.cloudAction('availability',()=>({day:'2026-10-02',slots:[...(h.q.state.availability[uid]['2026-10-02']||[]),slot]}))));assert.deepEqual(saved,['20','22']);assert.ok(![...h.storage.values()].some(v=>v.includes('2026-10-02')&&v.includes('slots')));
 console.log('PASS queued availability writes retain rapid selections and do not persist business data in browser storage');
-h.q.state.users[uid].securityOnly=true;h.q.state.customSlots=[{id:'c2300',time:'23:00',label:'23h00'}];h.q.state.exceptionalDays={'2026-10-04':{title:'Test'}};h.q.renderAll();
+h.q.state.month='2026-10';h.q.state.users[uid].securityOnly=true;h.q.state.customSlots=[{id:'c2300',time:'23:00',label:'23h00'}];h.q.state.exceptionalDays={'2026-10-04':{title:'Test'}};h.q.renderAll();
 for(const id of ['staffAvailabilityCalendar','staffExceptionalDays']){const html=h.elem(id).innerHTML;assert.ok(html.includes('data-av-slot="22"'));assert.ok(!/data-av-slot="(17|20|c2300)"/.test(html));}
 console.log('PASS employee regular and exceptional availability screens expose only 22h for security staff');
 })().catch(e=>{console.error(e);process.exitCode=1});

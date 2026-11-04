@@ -896,7 +896,7 @@ body.keyboard-open .top{position:relative}
   async function cloudPublish(dates){
     if(!isDirection()||!cloudReady){publishFeedback('Connexion ou synchronisation indisponible. Actualise les données avant de publier.',true);return false;}dates=dates.filter(v30Touched);if(!dates.length){publishFeedback('Aucun service à publier sur cette période.',true);toast('Aucun service à publier.');return false;}
     for(const d of dates)for(const [id,p] of employeeEntries()){const shift=v30Draft(id,d);if(shift.status==='present'&&(!shift.slot||!v30CanPublish(id,d,shift))){const message=p.name+' · '+shortDate(d)+' : choisis un créneau disponible'+(p.securityOnly?' à 22 h':'')+'.';publishFeedback(message,true);toast(message);return false;}}
-    try{dates.forEach(d=>{state.publishedPlans[d]=v30Snapshot(d);state.published[d]=true;});await flushCloudPlan();dates.forEach(d=>employeeEntries().forEach(([k])=>shiftExpanded.delete(shiftKey(k,d))));renderAll();renderCloudModules();publishFeedback('Planning publié et partagé avec les salariés.');toast('Planning publié dans Supabase.');return true;}catch(e){publishFeedback(e.message,true);toast(e.message);return false;}
+    try{dates.forEach(d=>{state.publishedPlans[d]=v30Snapshot(d);state.published[d]=v30DaySaved(d);});await flushCloudPlan();dates.forEach(d=>employeeEntries().forEach(([k])=>shiftExpanded.delete(shiftKey(k,d))));renderAll();renderCloudModules();publishFeedback('Planning publié et partagé avec les salariés.');toast('Planning publié dans Supabase.');return true;}catch(e){publishFeedback(e.message,true);toast(e.message);return false;}
   }
   function cloudAction(action,params={}){
     const owner=state.currentUser;
@@ -1157,7 +1157,7 @@ body.keyboard-open .top{position:relative}
   function v30Open(d,slot){const wd=v30Date(d).getDay();return isExceptional(d)||[5,6].includes(wd)||(wd===4&&(slot?isThursdaySlotOpen(d,slot):(state.thursdayUnlocked[d]||[]).length>0))}
   function v30Available(k,d){return (state.availability[k]?.[d]||[]).filter(id=>v30Open(d,id)&&personSlots(k).some(s=>s.id===id))}
   function v30Draft(k,d){const slot=state.validated[d]?.[k],status=state.planStatus[d]?.[k]||(slot?'present':'rest');return {status,slot:status==='present'?slot:null,end:state.shiftEnds[d]?.[k]||'04:00',...(status==='present'&&slot&&state.manualAssignments[d]?.[k]===slot?{manual:true}:{})}}
-  function v30Snapshot(d){const people={};employeeEntries().forEach(([k])=>people[k]=v30Draft(k,d));return {people,publishedAt:new Date().toISOString()}}
+  function v30Snapshot(d){const people={};employeeEntries().forEach(([k])=>{const draft=v30Draft(k,d),official=v30Official(k,d);if(draft.status!=='rest'||state.planStatus[d]?.[k]==='rest')people[k]=draft;else if(official)people[k]=official;});return {people,publishedAt:new Date().toISOString()}}
   function v30Time(t){const [h,m]=t.split(':').map(Number);return h*60+m}
   function v30Interval(p){
     if(p?.status!=='present'||!p.slot)return null;
@@ -1168,19 +1168,21 @@ body.keyboard-open .top{position:relative}
   function v30Hours(p){const i=v30Interval(p);return i?(i[1]-i[0])/60:0}
   function v30TimeLabel(n){return String(Math.floor(n/60)%24).padStart(2,'0')+'h'+String(n%60).padStart(2,'0')}
   function v30Range(p){const i=v30Interval(p);return i?`${slotDef(p.slot).time.replace(':','h')}${i[0]>=1440?' (+1j)':''} → ${p.end.replace(':','h')}${i[1]>=1440?' (+'+Math.floor(i[1]/1440)+'j)':''}`:'—'}
-  function v30Same(k,d){const p=state.publishedPlans[d]?.people[k],draft=v30Draft(k,d);return !!p&&!!p.manual===!!draft.manual&&['status','slot','end'].every(f=>p[f]===draft[f])}
-  function v30DaySaved(d){return !!state.publishedPlans[d]&&employeeEntries().every(([k])=>{const meaningful=v30Draft(k,d).status!=='rest'||state.planStatus[d]?.[k]==='rest'||!!state.publishedPlans[d]?.people[k];return !meaningful||v30Same(k,d);});}
+  function v30Official(k,d){const p=state.publishedPlans[d]?.people[k];return p?.status==='rest'&&state.planStatus[d]?.[k]!=='rest'?undefined:p;}
+  function v30Same(k,d){const p=v30Official(k,d),draft=v30Draft(k,d);return !!p&&!!p.manual===!!draft.manual&&['status','slot','end'].every(f=>p[f]===draft[f])}
+  function v30DaySaved(d){return !!state.publishedPlans[d]&&v30Touched(d)&&employeeEntries().every(([k])=>{const official=v30Official(k,d);if(v30Available(k,d).length&&!official)return false;const meaningful=v30Draft(k,d).status!=='rest'||state.planStatus[d]?.[k]==='rest'||!!official;return !meaningful||v30Same(k,d);});}
   function v30Presentation(k,d){
     const p=v30Draft(k,d),av=v30Available(k,d);let status=p.status,text=v30Labels[status]||'Repos';
     if(status==='rest'){
       if(isRegularThursday(d)&&!v30Open(d)){status='locked';text=v30Labels.locked}
+      else if(state.planStatus[d]?.[k]==='rest')text='Repos';
       else if(av.length)text='Disponibilité';
       else text=v30Open(d)?'Non planifié':'Repos';
     }
     const meaningful=p.status!=='rest'||state.planStatus[d]?.[k]==='rest';
     return {...p,color:status,text,detail:p.slot?v30Range(p):p.status==='rest'&&av.length?av.map(s=>slotDef(s).time.replace(':','h')).join(' / '):'',stage:meaningful?(v30Same(k,d)?'Publié':'Brouillon'):av.length?'À sélectionner':''};
   }
-  function v30Touched(d){return v30Open(d)||Object.values(state.validated[d]||{}).some(Boolean)||Object.keys(state.planStatus[d]||{}).length>0||!!state.publishedPlans[d]}
+  function v30Touched(d){return Object.keys(v30Snapshot(d).people).length>0;}
   function v30Changed(d){state.published[d]=false;save();renderDirection();renderHome();renderMySchedule();if(v30Editing) v30RenderEditor()}
   function v30Choose(k,d,slot){
     if(!isDirection()||!state.users[k]||!v30Available(k,d).includes(slot))return;
@@ -1220,7 +1222,7 @@ body.keyboard-open .top{position:relative}
       const shift=v30Draft(k,d);
       if(shift.status==='present'&&(!shift.slot||!v30CanPublish(k,d,shift))){toast(`${v30Esc(p.name)} · ${shortDate(d)} : choisissez un créneau encore disponible.`);return false}
     }
-    dates.forEach(d=>{state.publishedPlans[d]=v30Snapshot(d);state.published[d]=true;employeeEntries().forEach(([k])=>shiftExpanded.delete(shiftKey(k,d)))});save();
+    dates.forEach(d=>{state.publishedPlans[d]=v30Snapshot(d);state.published[d]=v30DaySaved(d);employeeEntries().forEach(([k])=>shiftExpanded.delete(shiftKey(k,d)))});save();
     logAction('Planning publié : '+dates[0]+' → '+dates[dates.length-1]);renderDirection();renderHome();renderMySchedule();
     const msg=`✓ Planning publié · ${dates.length} journée${dates.length>1?'s':''}. Les horaires personnels et l’accueil sont à jour.`;
     document.getElementById('v30-message').textContent=msg;toast('Planning publié.');return true;
@@ -1263,7 +1265,7 @@ body.keyboard-open .top{position:relative}
     return `<article class="v30-person" data-v30-person="${v30Esc(k)}"><h3>${v30Esc(state.users[k].name)}</h3><span class="v30-status v30-${p.status}">Validé · ${v30Labels[p.status]}</span><p style="font-size:22px;font-weight:850">${p.slot?v30Esc(v30Range(p)):v30Labels[p.status]}</p>${p.slot?`<p>${formatHours(v30Hours(p))} planifiées${p.manual?' · Saisie direction':''}</p>`:''}<button type="button" class="btn ghost" data-v30-edit data-person="${v30Esc(k)}" data-date="${d}">Modifier le service</button>${p.slot?` <button type="button" class="btn red" data-v30-delete data-person="${v30Esc(k)}" data-date="${d}">Supprimer le service</button>`:''}</article>`;
   }
   function v30Person(k,d){
-    const p=v30Presentation(k,d),av=v30Available(k,d),official=state.publishedPlans[d]?.people[k],name=state.users[k].name;
+    const p=v30Presentation(k,d),av=v30Available(k,d),official=v30Official(k,d),name=state.users[k].name;
     if(official&&v30Same(k,d)&&!shiftExpanded.has(shiftKey(k,d))&&!autoPlanningBusy)return v30ShiftSummary(k,d);
     return `<article class="v30-person" data-v30-person="${v30Esc(k)}"><h3>${v30Esc(name)}</h3><span class="v30-status v30-${p.color}">${p.text}${p.stage?' · '+p.stage:''}</span>
       <p class="v30-note">${autoPlanningBusy?'Enregistrement en cours…':'Les horaires choisis sont publiés automatiquement. Fin par défaut : 04h00, modifiable ci-dessous.'}</p><fieldset style="border:0;padding:0;margin:0;min-width:0" ${autoPlanningBusy?'disabled':''}>

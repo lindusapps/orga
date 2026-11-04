@@ -43,3 +43,9 @@ Le renvoi JSONB réordonne les propriétés : une comparaison du texte JSON brut
 ## Fermeture de la fenêtre de saisie après validation
 
 Le repli de la carte ne fermait pas la fenêtre contenant le formulaire. Après confirmation serveur, la fenêtre du salarié enregistré se ferme désormais et le planning affiche son shift compact. Une sauvegarde en attente ou en erreur laisse la fenêtre ouverte. Le test automatisé reproduit l'ancienne fenêtre restant ouverte, puis vérifie sa fermeture après choix du créneau, changement de fin, saisie manuelle et nouvelle tentative réussie.
+
+## Disponibilités masquées par des repos implicites — 4 novembre 2026
+
+Les anciennes publications de période incluaient chaque salarié avec un repos par défaut, même sans décision de la direction. La carte compacte pouvait alors masquer une disponibilité déclarée après la publication. Un repos ne replie désormais la carte que s'il correspond à un choix explicite ; les disponibilités restent visibles à valider. Les publications groupées excluent les salariés et dates sans décision, tout en préservant les congés, absences et repos explicitement choisis. Le serveur filtre aussi les nouveaux repos implicites envoyés par une ancienne interface. Une journée avec des disponibilités non traitées n'est pas présentée comme à jour.
+
+Les dix suites de tests passent. Le nouveau test reproduit le masquage avec l'ancien code. La remise en attente de la journée demandée a été sauvegardée puis vérifiée : aucune autre journée ni disponibilité n'a été modifiée. Les détails personnels de la restauration ne sont pas inclus dans ce dépôt.

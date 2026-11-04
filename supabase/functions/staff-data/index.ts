@@ -103,6 +103,9 @@ Deno.serve(async(req:Request)=>{
   for(const [d,snapshot] of Object.entries(next.publishedPlans) as any){
    if(JSON.stringify(snapshot)===JSON.stringify(plan.publishedPlans?.[d]))continue;
    if(!snapshot?.people||typeof snapshot.people!=='object'||Array.isArray(snapshot.people))throw new Error('Publication invalide.');
+   // Untouched employees are pending, not an implicit published day off.
+   for(const [id,p] of Object.entries(snapshot.people) as any)if(p?.status==='rest'&&next.planStatus?.[d]?.[id]!=='rest')delete snapshot.people[id];
+   if(!Object.keys(snapshot.people).length){delete next.publishedPlans[d];delete next.published[d];continue;}
    for(const [id,p] of Object.entries(snapshot.people) as any){if(JSON.stringify(p)===JSON.stringify(plan.publishedPlans?.[d]?.people?.[id]))continue;if(!active.has(id)||!['present','rest','leave','absent'].includes(p.status))throw new Error('Salarié ou statut invalide.');if(p.status==='present'){if(securityIds.has(id)&&p.slot!=='22'&&JSON.stringify(p)!==JSON.stringify(plan.publishedPlans?.[d]?.people?.[id]))throw new Error('Les agents Sécu commencent uniquement à 22 h.');if(p.manual!==undefined&&typeof p.manual!=='boolean')throw new Error('Saisie manuelle invalide.');if(p.manual===true&&next.manualAssignments?.[d]?.[id]!==p.slot)throw new Error('Confirme la saisie manuelle dans le planning.');if(!allowedSlots(next,d).includes(p.slot)||(p.manual!==true&&!av.find((a:any)=>a.user_id===id&&a.day===d)?.slots.includes(p.slot)))throw new Error('Disponibilité modifiée : utilise la saisie manuelle ou recharge le planning.');if(p.manual===true){p.assignedBy=u.id;p.assignedAt=new Date().toISOString();}else{delete p.assignedBy;delete p.assignedAt;}if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(p.end))throw new Error('Heure de fin invalide.');}}
    snapshot.publishedAt=new Date().toISOString();
   }
