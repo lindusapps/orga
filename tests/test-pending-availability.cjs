@@ -1,0 +1,16 @@
+const assert=require('node:assert/strict'),create=require('./harness.cjs');
+const {q,elem}=create({planner:true});q.completeLogin('ludovic');
+const day='2026-11-06';q.state.dirDate=day;q.state.calendarView='day';
+q.state.availability.a[day]=['20','22'];
+q.state.publishedPlans[day]={people:{a:{status:'rest',slot:null,end:'04:00'},b:{status:'leave',slot:null,end:'04:00'}},publishedAt:'2026-10-08T14:33:44Z'};
+q.state.planStatus[day]={b:'leave'};q.state.validated[day]={b:null};
+assert.match(q.v30Person('a',day),/data-v30-slot/,'Implicit published rest must not hide later availability');
+assert.ok(!q.v30Person('a',day).includes('Validé · Repos'));
+assert.match(q.v30Person('a',day),/Disponibilité/);
+assert.match(q.v30Person('b',day),/Validé · Congé/,'Preserve explicit leave');
+assert.match(q.v30Summary([day]),/0 publiée\(s\) à jour/);
+let snapshot=q.v30Snapshot(day);assert.equal(snapshot.people.a,undefined);assert.equal(snapshot.people.b.status,'leave');
+q.v30SetStatus('a',day,'rest');q.v30Publish([day]);assert.equal(q.state.publishedPlans[day].people.a.status,'rest');assert.match(q.v30Person('a',day),/Validé · Repos/,'Preserve intentionally selected rest');
+const empty='2026-11-13';q.state.dirDate=empty;assert.equal(q.v30Publish([empty]),false,'Do not publish a day just because Friday is open');assert.equal(q.state.publishedPlans[empty],undefined);
+q.v30Choose('a',day,'22');q.v30Publish([day]);assert.match(q.v30Person('a',day),/Modifier le service/);assert.ok(!q.v30Person('a',day).includes('data-v30-slot'));assert.equal(q.state.publishedPlans[day].people.b.status,'leave');
+console.log('PASS legacy implicit rest exposes availability, bulk excludes untouched people/days, explicit leave/rest and selected shifts preserved');
